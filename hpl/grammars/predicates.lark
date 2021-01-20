@@ -1,0 +1,71 @@
+predicate: "{" condition "}"
+
+top_level_condition: condition
+
+condition: [condition IF_OPERATOR] disjunction
+
+disjunction: [disjunction OR_OPERATOR] conjunction
+
+conjunction: [conjunction AND_OPERATOR] _logic_expr
+
+_logic_expr: negation
+           | quantification
+           | atomic_condition
+
+negation: NOT_OPERATOR _logic_expr
+
+quantification: QUANT_OPERATOR CNAME "in" _atomic_value ":" _logic_expr
+
+atomic_condition: expr [RELATIONAL_OPERATOR expr]
+
+expr: [expr ADD_OPERATOR] term
+
+term: [term MULT_OPERATOR] factor
+
+factor: [factor POWER_OPERATOR] _exponent
+
+_exponent: _atomic_value
+         | negative_number
+         | "(" condition ")"
+
+negative_number: MINUS_OPERATOR _exponent
+
+_atomic_value: boolean
+             | string
+             | number_constant
+             | number
+             | function_call
+             | enum_literal
+             | range_literal
+             | _reference
+
+number_constant: CONSTANT
+
+enum_literal: "{" _enum_member "}"
+
+_enum_member: [_enum_member ","] expr
+
+range_literal: _start_range expr "to" expr _end_range
+
+_start_range: L_RANGE_EXC | L_RANGE_INC
+
+_end_range: R_RANGE_EXC | R_RANGE_INC
+
+variable: VAR_REF
+
+function_call: CNAME "(" expr ")"
+
+_base_ref: variable
+         | own_field
+
+own_field: CNAME
+
+_reference: _base_ref
+          | field_access
+          | array_access
+
+field_access: _reference "." CNAME
+
+array_access: _reference "[" _index "]"
+
+_index: expr

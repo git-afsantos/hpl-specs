@@ -7,27 +7,16 @@ except ImportError:
 import os
 from setuptools import setup, find_packages
 
-# Utility function to read the README file.
-# Used for the long_description.  It"s nice, because now 1) we have a top level
-# README file and 2) it"s easier to type in the README file than to put a raw
-# string in below ...
+# Utility function to read the README, etc..
+# Used for the long_description and other fields.
 def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+    with open(os.path.join(os.path.dirname(__file__), fname)) as f:
+        contents = f.read()
+    return contents
 
 __version__ ,= re.findall('__version__ = "(.*)"', read("hpl/__init__.py"))
 
-
-# Courtesy of https://stackoverflow.com/a/36693250
-#def package_files(directory):
-#    paths = []
-#    for (path, directories, filenames) in os.walk(directory):
-#        for filename in filenames:
-#            paths.append(os.path.join("..", path, filename))
-#    return paths
-
-
-#extra_files = package_files("examples")
-#extra_files.append("*.yaml")
+requirements = [r for r in read("requirements.txt").splitlines() if r]
 
 
 setup(
@@ -41,12 +30,10 @@ setup(
     keywords         = "haros ros property-specification parser parsing ast",
     url              = "https://github.com/git-afsantos/hpl-specs",
     packages         = find_packages(),
+    scripts          = ["scripts/build_grammars"]
     #entry_points     = {"console_scripts": ["hplc = hpl.hplc:main"]},
-    #package_data     = {"hpl": extra_files},
-    install_requires = [
-        "future",
-        "lark-parser<1.0.0"
-    ],
+    package_data     = {"hpl": ["grammars/*.lark"]},
+    install_requires = requirements,
     extras_require   = {},
     zip_safe         = True
 )

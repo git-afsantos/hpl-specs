@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+
+import os
+
+# where this script is
+path = os.path.dirname(os.path.realpath(__file__))
+# parent dir
+path = os.path.abspath(os.path.join(path, os.pardir))
+# go to hpl/grammars
+path = os.path.join(path, "hpl", "grammars")
+
+with open(os.path.join(path, "tokens.lark"), "r") as f:
+    g_tokens = f.read()
+
+with open(os.path.join(path, "predicates.lark"), "r") as f:
+    g_predicates = f.read()
+
+with open(os.path.join(path, "properties.lark"), "r") as f:
+    g_properties = f.read()
+
+with open(os.path.join(path, "files.lark"), "r") as f:
+    g_files = f.read()
+
+INIT_PY = '''\
+# -*- coding: utf-8 -*-
+
+PREDICATE_GRAMMAR = r"""
+{predicate_grammar}
+{token_grammar}
+"""
+
+HPL_GRAMMAR = r"""
+{file_grammar}
+{property_grammar}
+{predicate_grammar}
+{token_grammar}
+"""
+'''.format(
+    token_grammar=g_tokens,
+    predicate_grammar=g_predicates,
+    property_grammar=g_properties,
+    file_grammar=g_files
+)
+
+with open(os.path.join(path, "__init__.py"), "w") as f:
+    f.write(INIT_PY)

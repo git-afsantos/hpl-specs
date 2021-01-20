@@ -1,0 +1,55 @@
+hpl_property: metadata? _scope ":" _pattern
+
+metadata: [metadata] "#" _metadata_item
+
+_metadata_item: metadata_id
+              | metadata_title
+              | metadata_desc
+
+metadata_id: "id" ":" CNAME
+
+metadata_title: "title" ":" ESCAPED_STRING
+
+metadata_desc: "description" ":" ESCAPED_STRING
+
+_scope: global_scope
+      | after_until
+      | until
+
+global_scope: "globally"
+
+after_until: "after" activator ["until" terminator]
+
+until: "until" terminator
+
+activator: event
+
+terminator: event
+
+_pattern: existence
+        | absence
+        | response
+        | prevention
+        | requirement
+
+existence: "some" event _time_bound?
+
+absence: "no" event _time_bound?
+
+response: event "causes" event _time_bound?
+
+prevention: event "forbids" event _time_bound?
+
+requirement: event "requires" event _time_bound?
+
+_time_bound: "within" time_amount
+
+event: message predicate?
+
+message: ros_name _alias?
+
+time_amount: NUMBER TIME_UNIT
+
+frequency: NUMBER FREQ_UNIT
+
+_alias: "as" CNAME
