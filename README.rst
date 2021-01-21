@@ -1,2 +1,2 @@
-# hpl-specs
-HAROS Property Specification Language
+HPL - The HAROS Property Specification Language
+###############################################
