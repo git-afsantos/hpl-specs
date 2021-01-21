@@ -1,6 +1,11 @@
+// SPDX-License-Identifier: MIT
+// Copyright © 2021 André Santos
+
 hpl_property: metadata? _scope ":" _pattern
 
-metadata: [metadata] "#" _metadata_item
+metadata: _metadata_items
+
+_metadata_items: [_metadata_items] "#" _metadata_item
 
 _metadata_item: metadata_id
               | metadata_title

@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+# SPDX-License-Identifier: MIT
+# Copyright © 2021 André Santos
+
 PREDICATE_GRAMMAR = r"""
 predicate: "{" condition "}"
 
@@ -134,7 +137,9 @@ _list_of_properties: [_list_of_properties] hpl_property
 
 hpl_property: metadata? _scope ":" _pattern
 
-metadata: [metadata] "#" _metadata_item
+metadata: _metadata_items
+
+_metadata_items: [_metadata_items] "#" _metadata_item
 
 _metadata_item: metadata_id
               | metadata_title
