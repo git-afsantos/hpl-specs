@@ -38,6 +38,12 @@ Bugs, Questions and Support
 
 Please use the `issue tracker <https://github.com/git-afsantos/hpl-specs/issues>`_.
 
+******
+Citing
+******
+
+See `CITING <./CITING.md>`_.
+
 ************
 Contributing
 ************
