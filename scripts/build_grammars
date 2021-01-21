@@ -1,28 +1,48 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# SPDX-License-Identifier: MIT
+# Copyright © 2021 André Santos
 
 import os
+try:
+    import regex as re
+except ImportError:
+    import re
+
+preamble = re.compile(r"\s*//\s*SPDX-License-Identifier:[^\n]+"
+                      r"\s*//\s*Copyright[^\n]+\s*")
 
 # where this script is
 path = os.path.dirname(os.path.realpath(__file__))
 # parent dir
 path = os.path.abspath(os.path.join(path, os.pardir))
-# go to hpl/grammars
-path = os.path.join(path, "hpl", "grammars")
+# go to src/hpl/grammars
+path = os.path.join(path, "src", "hpl", "grammars")
+
+def skip_preamble(text):
+    m = preamble.match(text)
+    if m:
+        return text[m.end():]
+    return text
 
 with open(os.path.join(path, "tokens.lark"), "r") as f:
-    g_tokens = f.read()
+    g_tokens = skip_preamble(f.read())
 
 with open(os.path.join(path, "predicates.lark"), "r") as f:
-    g_predicates = f.read()
+    g_predicates = skip_preamble(f.read())
 
 with open(os.path.join(path, "properties.lark"), "r") as f:
-    g_properties = f.read()
+    g_properties = skip_preamble(f.read())
 
 with open(os.path.join(path, "files.lark"), "r") as f:
-    g_files = f.read()
+    g_files = skip_preamble(f.read())
 
-INIT_PY = '''\
+GRAMMAR_PY = '''\
 # -*- coding: utf-8 -*-
+
+# SPDX-License-Identifier: MIT
+# Copyright © 2021 André Santos
 
 PREDICATE_GRAMMAR = r"""
 {predicate_grammar}
@@ -42,5 +62,5 @@ HPL_GRAMMAR = r"""
     file_grammar=g_files
 )
 
-with open(os.path.join(path, "__init__.py"), "w") as f:
-    f.write(INIT_PY)
+with open(os.path.join(path, os.pardir, "grammar.py"), "w") as f:
+    f.write(GRAMMAR_PY)
