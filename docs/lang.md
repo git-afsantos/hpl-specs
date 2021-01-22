@@ -1,5 +1,8 @@
 # Language Overview
 
+This document provides an overview of the HAROS Property Specification Language (HPL).
+Here you may find some [context](#context) and motivation for the language, its [core concepts](#concept) and a few [examples](#in-practice).
+
 ## Context
 
 In publisher-subscriber architectures (especially), where there are many-to-many communications, it is common to implement components in such a way that they are independent to some degree -- i.e., nodes should make no assumptions about other nodes in the network.
@@ -15,7 +18,7 @@ Considering this example, and how messages work in ROS, a specification language
 - temporal operators and relations (e.g., the message on `/stop` is observed after *and because of* the message on `/bumper`);
 - real-time behaviour specifications (e.g., observing a message at most 100 milliseconds after observing another).
 
-The publisher-subscriber paradigm is the prevalent means of communication in ROS ([reference](https://ieeexplore.ieee.org/document/8206237)).
+The publisher-subscriber paradigm is the prevalent means of communication in ROS ([SantosCMAS:17](https://ieeexplore.ieee.org/document/8206237)).
 HPL currently focuses on this single paradigm.
 Other message communication mechanisms, such as ROS Services or ROS Actions are left for future work.
 
@@ -76,7 +79,14 @@ This way, we have the necessary tools to establish relations between messages an
 /cmd_vel {linear.x = @teleop.linear.x}
 ```
 
-Putting all concepts together, a property basically comes down to the following hierarchichal structure(where dashed lines represent optional elements).
+To write down a full property, you simply combine events with the appropriate keywords for patterns and scopes.
+For example, to state that `linear.x` should *never* go over 1 m/s:
+
+```
+globally: no /cmd_vel {linear.x > 1.0}
+```
+
+Putting all concepts together, a property basically comes down to the following hierarchichal structure (where dashed lines represent optional elements).
 
 ![Concept Diagram](./fig/concept.png?raw=true "Concept Diagram")
 
