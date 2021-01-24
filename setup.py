@@ -31,6 +31,7 @@ setup(
     author_email     = "andre.f.santos@inesctec.pt",
     description      = "HAROS Property Specification Language",
     long_description = read("README.md"),
+    long_description_content_type = "text/markdown",
     license          = "MIT",
     keywords         = "haros ros property-specification parser parsing ast",
     url              = "https://github.com/git-afsantos/hpl-specs",
