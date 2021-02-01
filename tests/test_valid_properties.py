@@ -56,6 +56,12 @@ GOOD_PROPERTIES = [
     "globally: no /joy_teleop/joy {not buttons[0] in {0, 1}}",
 
     "globally: no /agrob/agrob_mode {not mode in {0,1,2,3}}",
+
+    """after (p1 or p2 as P2 or p3 {phi} or p4 as P4 {phi})
+        until (q1 or q2 as Q2 or q3 {phi} or q4 as Q4 {phi}):
+        (a1 or a2 as A2 or a3 {phi} or a4 as A4 {phi})
+        causes (b1 or b2 as B2 or b3 {phi} or b4 as B4 {phi})
+        within 100 ms"""
 ]
 
 

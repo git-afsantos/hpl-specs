@@ -33,7 +33,10 @@ BAD_PROPERTIES = [
     'globally: some topic {int > "42"}',
 
     # cannot duplicate aliases
-    "globally: input as M causes output1 as M"
+    "globally: input as M causes output1 as M",
+
+    # missing parenthesis
+    "globally: input1 as M or input2 causes output1 as M"
 ]
 
 
