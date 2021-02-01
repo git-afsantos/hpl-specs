@@ -161,9 +161,9 @@ after_until: "after" activator ["until" terminator]
 
 until: "until" terminator
 
-activator: event
+activator: _any_event
 
-terminator: event
+terminator: _any_event
 
 _pattern: existence
         | absence
@@ -171,19 +171,24 @@ _pattern: existence
         | prevention
         | requirement
 
-existence: "some" event _time_bound?
+existence: "some" _any_event _time_bound?
 
-absence: "no" event _time_bound?
+absence: "no" _any_event _time_bound?
 
-response: event "causes" event _time_bound?
+response: _any_event "causes" _any_event _time_bound?
 
-prevention: event "forbids" event _time_bound?
+prevention: _any_event "forbids" _any_event _time_bound?
 
-requirement: event "requires" event _time_bound?
+requirement: _any_event "requires" _any_event _time_bound?
 
 _time_bound: "within" time_amount
 
+_any_event: event
+          | event_disjunction
+
 event: message predicate?
+
+event_disjunction: "(" (event "or")+ event ")"
 
 message: ros_name _alias?
 

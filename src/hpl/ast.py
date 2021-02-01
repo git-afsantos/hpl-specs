@@ -460,6 +460,29 @@ class HplPattern(HplAstObject):
 ###############################################################################
 
 class HplEvent(HplAstObject):
+    @property
+    def is_event(self):
+        return True
+
+    @property
+    def is_simple_event(self):
+        return False
+
+    @property
+    def is_event_disjunction(self):
+        return False
+
+    def aliases(self):
+        return ()
+
+    def external_references(self):
+        return set()
+
+    def contains_reference(self, alias):
+        return False
+
+
+class HplSimpleEvent(HplEvent):
     __slots__ = ("event_type", "predicate", "topic", "alias", "msg_type")
 
     PUBLISH = 1
@@ -474,10 +497,8 @@ class HplEvent(HplAstObject):
         self.topic = topic # string
         self.alias = alias # string
         self.msg_type = None # ROS Type Token
-
-    @property
-    def is_event(self):
-        return True
+        if alias:
+            predicate.replace_self_reference(alias)
 
     @property
     def is_simple_event(self):
@@ -532,7 +553,7 @@ class HplEvent(HplAstObject):
         self.predicate.refine_types(rostype, aliases=aliases)
 
     def __eq__(self, other):
-        if not isinstance(other, HplEvent):
+        if not isinstance(other, HplSimpleEvent):
             return False
         return (self.event_type == other.event_type
                 and self.predicate == other.predicate
@@ -553,6 +574,58 @@ class HplEvent(HplAstObject):
         return "{}({}, {}, {}, alias={})".format(
             type(self).__name__, repr(self.event_type), repr(self.predicate),
             repr(self.topic), repr(self.alias))
+
+
+class HplEventDisjunction(HplEvent):
+    __slots__ = ("event1", "event2")
+
+    def __init__(self, event1, event2):
+        if not event1.is_event:
+            raise TypeError("not an event: " + str(event1))
+        if not event2.is_event:
+            raise TypeError("not an event: " + str(event2))
+        self.event1 = event1 # HplEvent
+        self.event2 = event2 # HplEvent
+
+    @property
+    def is_event_disjunction(self):
+        return True
+
+    @property
+    def events(self):
+        return (self.event1, self.event2)
+
+    def children(self):
+        return (self.event1, self.event2)
+
+    def aliases(self):
+        return self.event1.aliases() + self.event2.aliases()
+
+    def external_references(self):
+        return (self.event1.external_references()
+                | self.event2.external_references())
+
+    def contains_reference(self, alias):
+        return (self.event1.contains_reference(alias)
+                or self.event2.contains_reference(alias))
+
+    def __eq__(self, other):
+        if not isinstance(other, HplEventDisjunction):
+            return False
+        return ((self.event1 == other.event1
+                    and self.event2 == other.event2)
+                or (self.event1 == other.event2
+                    and self.event2 == other.event1))
+
+    def __hash__(self):
+        return 31 * hash(self.event1) + 31 * hash(self.event2)
+
+    def __str__(self):
+        return "({} or {})".format(self.event1, self.event2)
+
+    def __repr__(self):
+        return "{}({}, {})".format(
+            type(self).__name__, repr(self.event1), repr(self.event2))
 
 
 ###############################################################################

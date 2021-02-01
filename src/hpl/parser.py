@@ -15,11 +15,11 @@ from lark import Lark, Transformer
 from lark.exceptions import UnexpectedCharacters, UnexpectedToken
 
 from .ast import (
-    HplSpecification, HplProperty, HplScope, HplPattern, HplEvent,
+    HplSpecification, HplProperty, HplScope, HplPattern, HplSimpleEvent,
     HplExpression, HplPredicate, HplVacuousTruth, HplQuantifier,
     HplUnaryOperator, HplBinaryOperator, HplSet, HplRange, HplLiteral,
     HplVarReference, HplFunctionCall, HplFieldAccess, HplArrayAccess,
-    HplThisMessage
+    HplThisMessage, HplEventDisjunction
 )
 from .grammar import PREDICATE_GRAMMAR, HPL_GRAMMAR
 from .exceptions import HplSyntaxError
@@ -137,11 +137,19 @@ class PropertyTransformer(Transformer):
         max_time = INF if len(children) == 2 else children[2]
         return HplPattern.requirement(b, a, max_time=max_time)
 
+    def event_disjunction(self, children):
+        assert len(children) >= 2
+        if len(children) == 2:
+            return HplEventDisjunction(children[0], children[1])
+        else:
+            return HplEventDisjunction(
+                children[0], self.event_disjunction(children[1:]))
+
     def event(self, children):
         assert len(children) == 1 or len(children) == 2
         ros_name, alias = children[0]
         phi = HplVacuousTruth() if len(children) == 1 else children[1]
-        return HplEvent.publish(ros_name, alias=alias, predicate=phi)
+        return HplSimpleEvent.publish(ros_name, alias=alias, predicate=phi)
 
     def message(self, children):
         alias = None if len(children) == 1 else children[1]
