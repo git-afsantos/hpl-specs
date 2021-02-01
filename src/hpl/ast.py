@@ -479,6 +479,10 @@ class HplEvent(HplAstObject):
     def is_event(self):
         return True
 
+    @property
+    def is_simple_event(self):
+        return True
+
     @classmethod
     def publish(cls, topic, predicate=None, alias=None):
         if predicate is None:
@@ -515,6 +519,9 @@ class HplEvent(HplAstObject):
         if self.alias is not None:
             refs.discard(self.alias)
         return refs
+
+    def contains_reference(self, alias):
+        return self.predicate.contains_reference(alias)
 
     def refine_types(self, rostype, aliases=None):
         if self.msg_type is not None:
@@ -596,6 +603,28 @@ class HplPredicate(HplAstObject):
         expr = HplBinaryOperator("and", self.condition, other.condition)
         return HplPredicate(expr)
 
+    def external_references(self):
+        refs = set()
+        for obj in self.iterate():
+            if obj.is_expression and obj.is_accessor:
+                if obj.is_field and obj.message.is_value:
+                    if obj.message.is_variable:
+                        refs.add(obj.message.name)
+        return refs
+
+    def contains_reference(self, alias):
+        # alias = None: reference to `this msg`
+        # alias != None: external reference
+        for obj in self.iterate():
+            if obj.is_expression and obj.is_accessor:
+                if obj.is_field and obj.message.is_value:
+                    if alias and obj.message.is_variable:
+                        if obj.message.name == alias:
+                            return True
+                    if alias is None and obj.message.is_this_msg:
+                        return True
+        return False
+
     def refine_types(self, rostype, aliases=None):
         # rostype: ROS Type Token
         # aliases: string (alias) -> ROS Type Token
@@ -607,6 +636,16 @@ class HplPredicate(HplAstObject):
                 self._refine_type(obj, rostype, aliases)
             else:
                 stack.extend(reversed(obj.children()))
+
+    def replace_self_reference(self, alias):
+        for obj in self.iterate():
+            if obj.is_expression and obj.is_accessor:
+                if obj.is_field and obj.message.is_value:
+                    if obj.message.is_variable:
+                        if obj.message.name == alias:
+                            msg = HplThisMessage()
+                            obj.message = msg
+                            obj._type_check(msg, T_MSG)
 
     def _refine_type(self, accessor, rostype, aliases):
         stack = [accessor]
@@ -741,6 +780,15 @@ class HplVacuousTruth(HplAstObject):
     def join(self, other):
         return other
 
+    def external_references(self):
+        return set()
+
+    def contains_reference(self, alias):
+        return False
+
+    def replace_self_reference(self, alias):
+        pass
+
     def refine_types(self, rostype, aliases=None):
         pass
 
@@ -780,6 +828,15 @@ class HplContradiction(HplAstObject):
 
     def join(self, other):
         return self
+
+    def external_references(self):
+        return set()
+
+    def contains_reference(self, alias):
+        return False
+
+    def replace_self_reference(self, alias):
+        pass
 
     def refine_types(self, rostype, aliases=None):
         pass
