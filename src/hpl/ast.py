@@ -8,9 +8,9 @@
 ###############################################################################
 
 from __future__ import unicode_literals
-from builtins import str
+from builtins import object, str
+from collections import namedtuple
 from past.builtins import basestring
-from builtins import object
 
 from .exceptions import HplSanityError, HplTypeError
 
@@ -28,6 +28,8 @@ INF = float("inf")
 
 def isclose(a, b, rel_tol=1e-06, abs_tol=0.0):
     return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+
+RosNameMap = namedtuple("RosNameMap", ("msg",))
 
 
 ###############################################################################
@@ -156,6 +158,18 @@ class HplProperty(HplAstObject):
             yield self.pattern.trigger
         if self.scope.terminator is not None:
             yield self.scope.terminator
+
+    def get_rosname_map(self):
+        m = RosNameMap({})
+        for event in self.events():
+            for e in event.simple_events():
+                if e.is_publish:
+                    s = m.msg.get(e.topic)
+                    if s is None:
+                        s = []
+                        m.msg[e.topic] = s
+                    s.append(e)
+        return m
 
     def sanity_check(self):
         initial = self._check_activator()
@@ -481,6 +495,9 @@ class HplEvent(HplAstObject):
     def contains_reference(self, alias):
         return False
 
+    def simple_events(self):
+        raise NotImplementedError()
+
 
 class HplSimpleEvent(HplEvent):
     __slots__ = ("event_type", "predicate", "topic", "alias", "msg_type")
@@ -552,6 +569,9 @@ class HplSimpleEvent(HplEvent):
                 self.topic, self.msg_type, rostype)
         self.predicate.refine_types(rostype, aliases=aliases)
 
+    def simple_events(self):
+        yield self
+
     def __eq__(self, other):
         if not isinstance(other, HplSimpleEvent):
             return False
@@ -608,6 +628,18 @@ class HplEventDisjunction(HplEvent):
     def contains_reference(self, alias):
         return (self.event1.contains_reference(alias)
                 or self.event2.contains_reference(alias))
+
+    def simple_events(self):
+        if self.event1.is_simple_event:
+            yield self.event1
+        else:
+            for event in self.event1.simple_events():
+                yield event
+        if self.event2.is_simple_event:
+            yield self.event2
+        else:
+            for event in self.event2.simple_events():
+                yield event
 
     def __eq__(self, other):
         if not isinstance(other, HplEventDisjunction):
