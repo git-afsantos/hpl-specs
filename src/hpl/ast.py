@@ -425,6 +425,14 @@ class HplPattern(HplAstObject):
     def is_prevention(self):
         return self.pattern_type == self.PREVENTION
 
+    @property
+    def has_min_time(self):
+        return self.min_time > 0.0 and self.min_time < INF
+
+    @property
+    def has_max_time(self):
+        return self.max_time >= 0.0 and self.max_time < INF
+
     def children(self):
         if self.trigger is None:
             return (self.behaviour,)
