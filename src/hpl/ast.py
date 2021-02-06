@@ -726,17 +726,7 @@ class HplPredicate(HplAstObject):
         return refs
 
     def contains_reference(self, alias):
-        # alias = None: reference to `this msg`
-        # alias != None: external reference
-        for obj in self.iterate():
-            if obj.is_expression and obj.is_accessor:
-                if obj.is_field and obj.message.is_value:
-                    if alias and obj.message.is_variable:
-                        if obj.message.name == alias:
-                            return True
-                    if alias is None and obj.message.is_this_msg:
-                        return True
-        return False
+        return self.condition.contains_reference(alias)
 
     def refine_types(self, rostype, aliases=None):
         # rostype: ROS Type Token
@@ -1117,6 +1107,20 @@ class HplExpression(HplAstObject):
                     if obj.message.is_variable:
                         refs.add(obj.message.name)
         return refs
+
+    def contains_reference(self, alias):
+        # alias = None: reference to `this msg`
+        # alias != None: external reference
+        for obj in self.iterate():
+            assert obj.is_expression
+            if obj.is_accessor:
+                if obj.is_field and obj.message.is_value:
+                    if alias and obj.message.is_variable:
+                        if obj.message.name == alias:
+                            return True
+                    if alias is None and obj.message.is_this_msg:
+                        return True
+        return False
 
 
 ###############################################################################
