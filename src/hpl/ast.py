@@ -1108,6 +1108,16 @@ class HplExpression(HplAstObject):
         if not self.types:
             raise HplTypeError("no types left: " + str(self))
 
+    def external_references(self):
+        refs = set()
+        for obj in self.iterate():
+            assert obj.is_expression
+            if obj.is_accessor:
+                if obj.is_field and obj.message.is_value:
+                    if obj.message.is_variable:
+                        refs.add(obj.message.name)
+        return refs
+
 
 ###############################################################################
 # Quantifiers
