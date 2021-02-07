@@ -99,7 +99,7 @@ def _refactor_ref_pred(phi, alias):
     for expr in expressions:
         assert expr.can_be_bool
         if expr.is_value and expr.is_literal:
-            assert isinstance(expr, bool)
+            assert isinstance(expr.value, bool)
             if expr.value:
                 psi = HplVacuousTruth()
             else:
@@ -133,13 +133,19 @@ def _split_quantifier(quant, alias):
     # TODO optimize for nested quantifiers
     if quant.is_universal:
         # (A x: p & q)  ==  ((A x: p) & (A x: q))
+        if is_not(expr) and is_or(expr.operand):
+            expr = And(Not(expr.operand.a), Not(expr.operand.b))
         if is_and(expr):
-            a = expr.a.contains.reference(alias)
+            a = expr.a.contains_reference(alias)
             b = expr.b.contains_reference(alias)
             if a and not b:
+                _void_local_var(expr.a, quant.variable)
+                _void_local_var(expr.b, quant.variable)
                 return (Forall(quant.variable, quant.domain, expr.b),
                         Forall(quant.variable, quant.domain, expr.a))
             if b and not a:
+                _void_local_var(expr.a, quant.variable)
+                _void_local_var(expr.b, quant.variable)
                 return (Forall(quant.variable, quant.domain, expr.a),
                         Forall(quant.variable, quant.domain, expr.b))
             assert a and b
@@ -159,12 +165,12 @@ def _split_operator(op, alias):
     else:
         assert op.arity == 2
         if is_and(op):
-            a = expr.a.contains.reference(alias)
-            b = expr.b.contains_reference(alias)
+            a = op.a.contains_reference(alias)
+            b = op.b.contains_reference(alias)
             if a and not b:
-                return (expr.b, expr.a)
+                return (op.b, op.a)
             if b and not a:
-                return (expr.a, expr.b)
+                return (op.a, op.b)
             assert a and b
         # cannot split into two parts
         return (true(), op)
@@ -178,6 +184,7 @@ def _split_negation(neg, alias):
     if expr.is_quantifier:
         if expr.is_existential:
             # (~E x: p)  ==  (A x: ~p)
+            _void_local_var(expr.condition, expr.variable)
             expr = Forall(expr.variable, expr.domain, Not(expr.condition))
             return _split_quantifier(expr, alias)
         # TODO optimize for other (harder) cases
@@ -197,6 +204,14 @@ def _split_negation(neg, alias):
         # cannot split into two parts
         return (true(), neg)
     assert False, "unknown expression type: " + repr(expr)
+
+def _void_local_var(expr, var):
+    for obj in expr.iterate():
+        assert obj.is_expression
+        if obj.is_value:
+            if obj.is_reference and obj.is_variable:
+                if obj.name == var:
+                    obj.defined_at = None
 
 
 ###############################################################################
