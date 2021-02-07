@@ -717,13 +717,7 @@ class HplPredicate(HplAstObject):
         return HplPredicate(expr)
 
     def external_references(self):
-        refs = set()
-        for obj in self.iterate():
-            if obj.is_expression and obj.is_accessor:
-                if obj.is_field and obj.message.is_value:
-                    if obj.message.is_variable:
-                        refs.add(obj.message.name)
-        return refs
+        return self.condition.external_references()
 
     def contains_reference(self, alias):
         return self.condition.contains_reference(alias)
@@ -1154,6 +1148,10 @@ class HplQuantifier(HplExpression):
         return self.quantifier == "forall"
 
     @property
+    def is_existential(self):
+        return self.quantifier == "exists"
+
+    @property
     def op(self):
         return self.quantifier
 
@@ -1235,6 +1233,13 @@ class HplQuantifier(HplExpression):
             repr(self.domain), repr(self.condition))
 
 
+def Forall(x, dom, phi):
+    return HplQuantifier("forall", x, dom, phi)
+
+def Exists(x, dom, phi):
+    return HplQuantifier("exists", x, dom, phi)
+
+
 ###############################################################################
 # Operators and Functions
 ###############################################################################
@@ -1291,6 +1296,10 @@ class HplUnaryOperator(HplExpression):
     def __repr__(self):
         return "{}({}, {})".format(
             type(self).__name__, repr(self.operator), repr(self.operand))
+
+
+def Not(a):
+    return HplUnaryOperator("not", a)
 
 
 class HplBinaryOperator(HplExpression):
@@ -1381,6 +1390,19 @@ class HplBinaryOperator(HplExpression):
         return "{}({}, {}, {})".format(
             type(self).__name__, repr(self.operator),
             repr(self.operand1), repr(self.operand2))
+
+
+def And(a, b):
+    return HplBinaryOperator("and", a, b)
+
+def Or(a, b):
+    return HplBinaryOperator("or", a, b)
+
+def Implies(a, b):
+    return HplBinaryOperator("implies", a, b)
+
+def Iff(a, b):
+    return HplBinaryOperator("iff", a, b)
 
 
 class HplFunctionCall(HplExpression):
