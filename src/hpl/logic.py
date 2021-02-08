@@ -11,9 +11,9 @@ from __future__ import unicode_literals
 from past.builtins import basestring
 
 from .ast import (
-    And, Forall, Or, Not,
+    And, Forall, Or, Not, T_MSG,
     HplBinaryOperator, HplContradiction, HplFunctionCall, HplLiteral,
-    HplPredicate, HplVacuousTruth
+    HplPredicate, HplThisMessage, HplVacuousTruth, HplVarReference
 )
 
 ###############################################################################
@@ -31,23 +31,51 @@ OP_IFF = "iff"
 # Formula Rewriting
 ###############################################################################
 
-def replace_this_msg(predicate_or_expression, alias_prev_this, alias_new_this):
-    # alias_prev_this:  alias to replace previous `this` with
-    # alias_new_this:   alias to remove and replace with `this`
+def replace_this_with_var(predicate_or_expression, alias):
     if (not predicate_or_expression.is_predicate
             and not predicate_or_expression.is_expression):
         raise TypeError("expected HplPredicate or HplExpression: "
                         + repr(predicate_or_expression))
-    if not isinstance(alias_prev_this, basestring):
-        raise TypeError("expected string alias: " + repr(alias_prev_this))
-    if not isinstance(alias_new_this, basestring):
-        raise TypeError("expected string alias: " + repr(alias_new_this))
+    if not isinstance(alias, basestring):
+        raise TypeError("expected string alias: " + repr(alias))
     if predicate_or_expression.is_predicate:
-        if not predicate_or_expression.is_vacuous:
-            _replace_msg(predicate_or_expression.condition,
-                         alias_prev_this, alias_new_this)
+        if predicate_or_expression.is_vacuous:
+            return
+        expr = predicate_or_expression.condition
     else:
-        _replace_msg(predicate_or_expression, alias_prev_this, alias_new_this)
+        expr = predicate_or_expression
+    for obj in expr.iterate():
+        assert obj.is_expression
+        if obj.is_accessor:
+            if obj.is_field and obj.message.is_value:
+                if obj.message.is_this_msg:
+                    msg = HplVarReference("@" + alias)
+                    msg.ros_type = obj.message.ros_type
+                    obj.message = msg
+                    obj._type_check(msg, T_MSG)
+
+def replace_var_with_this(predicate_or_expression, alias):
+    if (not predicate_or_expression.is_predicate
+            and not predicate_or_expression.is_expression):
+        raise TypeError("expected HplPredicate or HplExpression: "
+                        + repr(predicate_or_expression))
+    if not isinstance(alias, basestring):
+        raise TypeError("expected string alias: " + repr(alias))
+    if predicate_or_expression.is_predicate:
+        if predicate_or_expression.is_vacuous:
+            return
+        expr = predicate_or_expression.condition
+    else:
+        expr = predicate_or_expression
+    for obj in expr.iterate():
+        assert obj.is_expression
+        if obj.is_accessor:
+            if obj.is_field and obj.message.is_value:
+                if obj.message.is_variable and obj.message.name == alias:
+                    msg = HplThisMessage()
+                    msg.ros_type = obj.message.ros_type
+                    obj.message = msg
+                    obj._type_check(msg, T_MSG)
 
 
 def refactor_reference(predicate_or_expression, alias):
@@ -65,32 +93,6 @@ def refactor_reference(predicate_or_expression, alias):
 ###############################################################################
 # Formula Rewriting - Helper Functions
 ###############################################################################
-
-def _replace_msg(expr, old_this, new_this):
-    if not expr.contains_reference(new_this):
-        return
-    objs_new_this = []
-    objs_old_this = []
-    for obj in expr.iterate():
-        assert obj.is_expression
-        if obj.is_accessor:
-            if obj.is_field and obj.message.is_value:
-                if obj.message.is_variable:
-                    if obj.message.name == new_this:
-                        objs_new_this.append(obj)
-                elif obj.message.is_this_msg:
-                    objs_old_this.append(obj)
-    for obj in objs_new_this:
-        msg = HplThisMessage()
-        msg.ros_type = obj.message.ros_type
-        obj.message = msg
-        obj._type_check(msg, T_MSG)
-    for obj in objs_old_this:
-        msg = HplVarReference("@" + old_this)
-        msg.ros_type = obj.message.ros_type
-        obj.message = msg
-        obj._type_check(msg, T_MSG)
-
 
 def _refactor_ref_pred(phi, alias):
     if phi.is_vacuous:
@@ -145,9 +147,9 @@ def _split_quantifier(quant, alias):
             vb = expr.b.contains_reference(var)
             if a and not b:
                 if va:
-                    qa = Forall(var, dom, expr.a, shadow=True)
+                    qa = Forall(var, dom.clone(), expr.a, shadow=True)
                 else:
-                    qa = Or(empty_test(dom), expr.a)
+                    qa = Or(empty_test(dom.clone()), expr.a)
                 if vb:
                     qb = Forall(var, dom, expr.b, shadow=True)
                 else:
@@ -159,9 +161,9 @@ def _split_quantifier(quant, alias):
                 else:
                     qa = Or(empty_test(dom), expr.a)
                 if vb:
-                    qb = Forall(var, dom, expr.b, shadow=True)
+                    qb = Forall(var, dom.clone(), expr.b, shadow=True)
                 else:
-                    qb = Or(empty_test(dom), expr.b)
+                    qb = Or(empty_test(dom.clone()), expr.b)
                 return (qa, qb)
             assert a and b
         # move everything

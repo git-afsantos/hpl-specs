@@ -11,7 +11,9 @@
 import logging
 from sys import exit
 
-from hpl.logic import is_true, replace_this_msg, refactor_reference
+from hpl.logic import (
+    is_true, replace_this_with_var, replace_var_with_this, refactor_reference
+)
 from hpl.parser import predicate_parser
 
 
@@ -60,6 +62,7 @@ REF_WITH_SPLITS = [
     "not exists x in xs: (@x or @B.x)",         # negated disjunction
     "forall x in xs: (@x and @B.x)",            # ref on one side
     "forall x in xs: not (@x or @B.x)",         # ref on one side
+    "forall x in xs: (@x >= 0 and @B.x < @x)",  # ref on one side
 ]
 
 
@@ -109,27 +112,34 @@ def test_refactor_reference():
 
 def test_replace_this_msg():
     parser = predicate_parser()
-
-def test_valid_predicates():
-    parser = predicate_parser()
-    for test_str in GOOD_PREDICATES:
+    for test_str in REF_BUT_NO_SPLITS:
         print "\n  #", repr(test_str)
-        try:
-            ast = parser.parse(test_str)
-            print "[Parsing] OK (expected)"
-            print ""
-            print repr(ast)
-        except (HplSanityError, HplSyntaxError, HplTypeError) as e:
-            print "[Parsing] FAIL (unexpected)"
-            print "  >>", str(e)
-            return 1
-    print "\nAll", str(len(GOOD_PREDICATES)), "tests passed."
-    return 0
+        expr = parser.parse(test_str)
+        phi, psi = refactor_reference(expr, "B")
+        assert is_true(phi)
+        replace_this_with_var(psi, "A")
+        replace_var_with_this(psi, "B")
+        print "[Replace] output:"
+        print "   2:", psi
+    for test_str in REF_WITH_SPLITS:
+        print "\n  #", repr(test_str)
+        expr = parser.parse(test_str)
+        phi, psi = refactor_reference(expr, "B")
+        assert not is_true(phi)
+        assert not is_true(psi)
+        replace_this_with_var(psi, "A")
+        replace_var_with_this(psi, "B")
+        print "[Replace] output:"
+        print "  1:", phi
+        print "  2:", psi
+    n = len(REF_BUT_NO_SPLITS) + len(REF_WITH_SPLITS)
+    print "\nAll", str(n), "tests passed."
 
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
     test_refactor_reference()
+    test_replace_this_msg()
     return 0
 
 
