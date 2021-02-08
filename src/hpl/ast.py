@@ -179,8 +179,16 @@ class HplProperty(HplAstObject):
 
     def sanity_check(self):
         initial = self._check_activator()
-        aliases = self._check_trigger(initial)
-        self._check_behaviour(aliases)
+        if self.pattern.is_absence or self.pattern.is_existence:
+            self._check_behaviour(initial)
+        elif self.pattern.is_requirement:
+            aliases = self._check_behaviour(initial)
+            self._check_trigger(aliases)
+        elif self.pattern.is_response or self.pattern.is_prevention:
+            aliases = self._check_trigger(initial)
+            self._check_behaviour(aliases)
+        else:
+            assert False, "unexpected pattern type: " + repr(s.pattern_type)
         self._check_terminator(initial)
 
     def clone(self):
@@ -198,19 +206,9 @@ class HplProperty(HplAstObject):
         return ()
 
     def _check_trigger(self, available):
-        s = self.pattern
-        if s.is_absence or s.is_existence:
-            return available
-        a = s.trigger
+        a = self.pattern.trigger
         assert a is not None
-        ext = a.external_references()
-        if s.is_response or s.is_prevention:
-            self._check_refs_defined(ext, available)
-        elif s.is_requirement:
-            aliases = available + s.behaviour.aliases()
-            self._check_refs_defined(ext, aliases)
-        else:
-            assert False, "unexpected pattern type: " + repr(s.pattern_type)
+        self._check_refs_defined(a.external_references(), available)
         aliases = a.aliases()
         self._check_duplicates(aliases, available)
         return aliases + available
@@ -218,7 +216,9 @@ class HplProperty(HplAstObject):
     def _check_behaviour(self, available):
         b = self.pattern.behaviour
         self._check_refs_defined(b.external_references(), available)
-        self._check_duplicates(b.aliases(), available)
+        aliases = b.aliases()
+        self._check_duplicates(aliases, available)
+        return aliases + available
 
     def _check_terminator(self, available):
         q = self.scope.terminator
