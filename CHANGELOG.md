@@ -8,3 +8,5 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - Convenience methods in `HplPredicate` to check references to aliases.
 - Event disjunctions; e.g., `(a or b) causes c`.
+- Convenience methods to duplicate `HplAstObject` instances.
+- `logic` module with some convenience, logic-related functions.
