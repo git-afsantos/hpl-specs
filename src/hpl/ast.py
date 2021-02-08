@@ -75,6 +75,9 @@ class HplAstObject(object):
             stack.extend(reversed(obj.children()))
             yield obj
 
+    def clone(self):
+        raise NotImplementedError()
+
 
 class HplSpecification(HplAstObject):
     __slots__ = ("properties",)
@@ -92,6 +95,9 @@ class HplSpecification(HplAstObject):
     def sanity_check(self):
         for prop in self.properties:
             prop.sanity_check()
+
+    def clone(self):
+        return HplSpecification([p.clone() for p in self.properties])
 
     def __eq__(self, other):
         if not isinstance(other, HplSpecification):
@@ -176,6 +182,10 @@ class HplProperty(HplAstObject):
         aliases = self._check_trigger(initial)
         self._check_behaviour(aliases)
         self._check_terminator(initial)
+
+    def clone(self):
+        return HplProperty(self.scope.clone(), self.pattern.clone(),
+                           meta=dict(self.metadata))
 
     def _check_activator(self):
         p = self.scope.activator
@@ -314,6 +324,11 @@ class HplScope(HplAstObject):
             return (self.activator,)
         return (self.activator, self.terminator)
 
+    def clone(self):
+        p = None if self.activator is None else self.activator.clone()
+        q = None if self.terminator is None else self.terminator.clone()
+        return HplScope(self.scope_type, activator=p, terminator=q)
+
     def __eq__(self, other):
         if not isinstance(other, HplScope):
             return False
@@ -437,6 +452,12 @@ class HplPattern(HplAstObject):
         if self.trigger is None:
             return (self.behaviour,)
         return (self.trigger, self.behaviour)
+
+    def clone(self):
+        b = self.behaviour.clone()
+        a = None if self.trigger is None else self.trigger.clone()
+        return HplPattern(self.pattern_type, b, a, min_time=self.min_time,
+                          max_time=self.max_time)
 
     def __eq__(self, other):
         if not isinstance(other, HplPattern):
@@ -580,6 +601,12 @@ class HplSimpleEvent(HplEvent):
     def simple_events(self):
         yield self
 
+    def clone(self):
+        p = self.predicate.clone()
+        event = HplSimpleEvent(self.event_type, p, self.topic, alias=self.alias)
+        event.msg_type = self.msg_type
+        return event
+
     def __eq__(self, other):
         if not isinstance(other, HplSimpleEvent):
             return False
@@ -648,6 +675,9 @@ class HplEventDisjunction(HplEvent):
         else:
             for event in self.event2.simple_events():
                 yield event
+
+    def clone(self):
+        return HplEventDisjunction(self.event1.clone(), self.event2.clone())
 
     def __eq__(self, other):
         if not isinstance(other, HplEventDisjunction):
@@ -743,6 +773,9 @@ class HplPredicate(HplAstObject):
                             msg = HplThisMessage()
                             obj.message = msg
                             obj._type_check(msg, T_MSG)
+
+    def clone(self):
+        return HplPredicate(self.condition.clone())
 
     def _refine_type(self, accessor, rostype, aliases):
         stack = [accessor]
@@ -889,6 +922,9 @@ class HplVacuousTruth(HplAstObject):
     def refine_types(self, rostype, aliases=None):
         pass
 
+    def clone(self):
+        return HplVacuousTruth()
+
     def __eq__(self, other):
         return isinstance(other, HplVacuousTruth)
 
@@ -937,6 +973,9 @@ class HplContradiction(HplAstObject):
 
     def refine_types(self, rostype, aliases=None):
         pass
+
+    def clone(self):
+        return HplContradiction()
 
     def __eq__(self, other):
         return isinstance(other, HplContradiction)
@@ -1176,6 +1215,13 @@ class HplQuantifier(HplExpression):
     def children(self):
         return (self.domain, self.condition)
 
+    def clone(self):
+        expr = HplQuantifier(self.quantifier, self.variable,
+                             self.domain.clone(), self.condition.clone(),
+                             shadow=True)
+        expr.types = self.types
+        return expr
+
     def _check_variables(self, shadow):
         types = self._check_domain_vars()
         self._check_expression_vars(types, shadow)
@@ -1280,6 +1326,11 @@ class HplUnaryOperator(HplExpression):
     def children(self):
         return (self.operand,)
 
+    def clone(self):
+        expr = HplUnaryOperator(self.operator, self.operand.clone())
+        expr.types = self.types
+        return expr
+
     def __eq__(self, other):
         if not isinstance(other, HplUnaryOperator):
             return False
@@ -1361,6 +1412,12 @@ class HplBinaryOperator(HplExpression):
 
     def children(self):
         return (self.operand1, self.operand2)
+
+    def clone(self):
+        expr = HplBinaryOperator(self.operator, self.operand1.clone(),
+                                 self.operand2.clone())
+        expr.types = self.types
+        return expr
 
     def __eq__(self, other):
         if not isinstance(other, HplBinaryOperator):
@@ -1446,6 +1503,12 @@ class HplFunctionCall(HplExpression):
     def children(self):
         return self.arguments
 
+    def clone(self):
+        expr = HplFunctionCall(self.function,
+                               tuple(a.clone() for a in self.arguments))
+        expr.types = self.types
+        return expr
+
     def __eq__(self, other):
         if not isinstance(other, HplFunctionCall):
             return False
@@ -1499,6 +1562,12 @@ class HplFieldAccess(HplExpression):
 
     def children(self):
         return (self.message,)
+
+    def clone(self):
+        expr = HplFieldAccess(self.message.clone(), self.field)
+        expr.ros_type = self.ros_type
+        expr.types = self.types
+        return expr
 
     def __eq__(self, other):
         if not isinstance(other, HplFieldAccess):
@@ -1560,6 +1629,12 @@ class HplArrayAccess(HplExpression):
 
     def children(self):
         return (self.array, self.index)
+
+    def clone(self):
+        expr = HplArrayAccess(self.array.clone(), self.index.clone())
+        expr.ros_type = self.ros_type
+        expr.types = self.types
+        return expr
 
     def __eq__(self, other):
         if not isinstance(other, HplArrayAccess):
@@ -1644,6 +1719,11 @@ class HplSet(HplValue):
     def children(self):
         return self.values
 
+    def clone(self):
+        expr = HplSet(tuple(v.clone() for v in self.values))
+        expr.types = self.types
+        return expr
+
     def __eq__(self, other):
         if not isinstance(other, HplSet):
             return False
@@ -1685,6 +1765,12 @@ class HplRange(HplValue):
 
     def children(self):
         return (self.min_value, self.max_value)
+
+    def clone(self):
+        expr = HplRange(self.min_value.clone(), self.max_value.clone(),
+                        exc_min=self.exclude_min, exc_max=self.exclude_max)
+        expr.types = self.types
+        return expr
 
     def __eq__(self, other):
         if not isinstance(other, HplRange):
@@ -1736,6 +1822,11 @@ class HplLiteral(HplValue):
     def is_literal(self):
         return True
 
+    def clone(self):
+        expr = HplLiteral(self.token, self.value)
+        expr.types = self.types
+        return expr
+
     def __eq__(self, other):
         if not isinstance(other, HplLiteral):
             return False
@@ -1766,6 +1857,12 @@ class HplThisMessage(HplValue):
     @property
     def is_this_msg(self):
         return True
+
+    def clone(self):
+        expr = HplThisMessage()
+        expr.ros_type = self.ros_type
+        expr.types = self.types
+        return expr
 
     def __eq__(self, other):
         return isinstance(other, HplThisMessage)
@@ -1804,6 +1901,12 @@ class HplVarReference(HplValue):
     @property
     def is_defined(self):
         return self.defined_at is not None
+
+    def clone(self):
+        expr = HplVarReference(self.token)
+        expr.ros_type = self.ros_type
+        expr.types = self.types
+        return expr
 
     def __eq__(self, other):
         if not isinstance(other, HplVarReference):
