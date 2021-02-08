@@ -76,8 +76,8 @@ def test_refactor_reference():
         assert phi.is_expression
         assert psi.is_expression
         print "[Refactor] output:"
-        print " 1:", phi
-        print " 2:", psi
+        print "  1:", phi
+        print "  2:", psi
         assert phi is expr
         assert is_true(psi)
     for test_str in REF_BUT_NO_SPLITS:
@@ -87,8 +87,8 @@ def test_refactor_reference():
         assert phi.is_expression
         assert psi.is_expression
         print "[Refactor] output:"
-        print " 1:", phi
-        print " 2:", psi
+        print "  1:", phi
+        print "  2:", psi
         #assert psi is expr
         assert is_true(phi)
     for test_str in REF_WITH_SPLITS:
@@ -98,8 +98,8 @@ def test_refactor_reference():
         assert phi.is_expression
         assert psi.is_expression
         print "[Refactor] output:"
-        print " 1:", phi
-        print " 2:", psi
+        print "  1:", phi
+        print "  2:", psi
         assert phi != expr
         assert psi != expr
         assert not is_true(phi)

@@ -1105,14 +1105,16 @@ class HplExpression(HplAstObject):
     def contains_reference(self, alias):
         # alias = None: reference to `this msg`
         # alias != None: external reference
-        for obj in self.iterate():
-            assert obj.is_expression
-            if obj.is_accessor:
-                if obj.is_field and obj.message.is_value:
-                    if alias and obj.message.is_variable:
-                        if obj.message.name == alias:
-                            return True
-                    if alias is None and obj.message.is_this_msg:
+        if alias is None:
+            for obj in self.iterate():
+                assert obj.is_expression
+                if obj.is_value and obj.is_this_msg:
+                    return True
+        else:
+            for obj in self.iterate():
+                assert obj.is_expression
+                if obj.is_value and obj.is_variable:
+                    if obj.name == alias:
                         return True
         return False
 
@@ -1129,7 +1131,7 @@ class HplQuantifier(HplExpression):
     _MULTI_DEF = "multiple definitions of variable '{}' in:\n{}"
     _UNUSED = "quantified variable '{}' is never used in:\n{}"
 
-    def __init__(self, qt, var, dom, p):
+    def __init__(self, qt, var, dom, p, shadow=False):
         HplExpression.__init__(self, types=T_BOOL)
         self.quantifier = qt # string
         self.variable = var # string
@@ -1137,7 +1139,7 @@ class HplQuantifier(HplExpression):
         self.condition = p # HplExpression
         self._type_check(dom, T_COMP)
         self._type_check(p, T_BOOL)
-        self._check_variables()
+        self._check_variables(shadow)
 
     @property
     def is_quantifier(self):
@@ -1174,9 +1176,9 @@ class HplQuantifier(HplExpression):
     def children(self):
         return (self.domain, self.condition)
 
-    def _check_variables(self):
+    def _check_variables(self, shadow):
         types = self._check_domain_vars()
-        self._check_expression_vars(types)
+        self._check_expression_vars(types, shadow)
 
     def _check_domain_vars(self):
         dom = self.domain
@@ -1192,7 +1194,7 @@ class HplQuantifier(HplExpression):
                 return dom.subtypes
         return T_PRIM
 
-    def _check_expression_vars(self, t):
+    def _check_expression_vars(self, t, shadow):
         uid = id(self)
         used = 0
         for obj in self.condition.iterate():
@@ -1200,7 +1202,7 @@ class HplQuantifier(HplExpression):
             if obj.is_value and obj.is_variable:
                 v = obj.name
                 if self.variable == v:
-                    if obj.is_defined:
+                    if obj.is_defined and not shadow:
                         assert obj.defined_at != uid
                         raise HplSanityError(self._MULTI_DEF.format(v, self))
                     obj.defined_at = uid
@@ -1233,11 +1235,11 @@ class HplQuantifier(HplExpression):
             repr(self.domain), repr(self.condition))
 
 
-def Forall(x, dom, phi):
-    return HplQuantifier("forall", x, dom, phi)
+def Forall(x, dom, phi, shadow=False):
+    return HplQuantifier("forall", x, dom, phi, shadow=shadow)
 
-def Exists(x, dom, phi):
-    return HplQuantifier("exists", x, dom, phi)
+def Exists(x, dom, phi, shadow=False):
+    return HplQuantifier("exists", x, dom, phi, shadow=shadow)
 
 
 ###############################################################################
@@ -1415,7 +1417,7 @@ class HplFunctionCall(HplExpression):
         "int": (T_PRIM, T_NUM),
         "float": (T_PRIM, T_NUM),
         "str": (T_PRIM, T_STR),
-        "len": (T_ARR, T_NUM),
+        "len": (T_COMP, T_NUM),
         "max": (T_ARR, T_NUM),
         "min": (T_ARR, T_NUM),
         "sum": (T_ARR, T_NUM),

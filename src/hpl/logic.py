@@ -11,8 +11,9 @@ from __future__ import unicode_literals
 from past.builtins import basestring
 
 from .ast import (
-    And, Forall, Not,
-    HplContradiction, HplLiteral, HplPredicate, HplVacuousTruth
+    And, Forall, Or, Not,
+    HplBinaryOperator, HplContradiction, HplFunctionCall, HplLiteral,
+    HplPredicate, HplVacuousTruth
 )
 
 ###############################################################################
@@ -125,7 +126,9 @@ def _refactor_ref_expr(expr, alias):
     assert False, "unknown expression type: " + repr(expr)
 
 def _split_quantifier(quant, alias):
-    if quant.domain.contains_reference(alias):
+    var = quant.variable
+    dom = quant.domain
+    if dom.contains_reference(alias):
         # move the whole expression
         return (true(), quant)
     expr = quant.condition
@@ -138,16 +141,28 @@ def _split_quantifier(quant, alias):
         if is_and(expr):
             a = expr.a.contains_reference(alias)
             b = expr.b.contains_reference(alias)
+            va = expr.a.contains_reference(var)
+            vb = expr.b.contains_reference(var)
             if a and not b:
-                _void_local_var(expr.a, quant.variable)
-                _void_local_var(expr.b, quant.variable)
-                return (Forall(quant.variable, quant.domain, expr.b),
-                        Forall(quant.variable, quant.domain, expr.a))
+                if va:
+                    qa = Forall(var, dom, expr.a, shadow=True)
+                else:
+                    qa = Or(empty_test(dom), expr.a)
+                if vb:
+                    qb = Forall(var, dom, expr.b, shadow=True)
+                else:
+                    qb = Or(empty_test(dom), expr.b)
+                return (qb, qa)
             if b and not a:
-                _void_local_var(expr.a, quant.variable)
-                _void_local_var(expr.b, quant.variable)
-                return (Forall(quant.variable, quant.domain, expr.a),
-                        Forall(quant.variable, quant.domain, expr.b))
+                if va:
+                    qa = Forall(var, dom, expr.a, shadow=True)
+                else:
+                    qa = Or(empty_test(dom), expr.a)
+                if vb:
+                    qb = Forall(var, dom, expr.b, shadow=True)
+                else:
+                    qb = Or(empty_test(dom), expr.b)
+                return (qa, qb)
             assert a and b
         # move everything
         return (true(), quant)
@@ -184,8 +199,9 @@ def _split_negation(neg, alias):
     if expr.is_quantifier:
         if expr.is_existential:
             # (~E x: p)  ==  (A x: ~p)
-            _void_local_var(expr.condition, expr.variable)
-            expr = Forall(expr.variable, expr.domain, Not(expr.condition))
+            p = Not(expr.condition)
+            assert p.contains_reference(expr.variable)
+            expr = Forall(expr.variable, expr.domain, p, shadow=True)
             return _split_quantifier(expr, alias)
         # TODO optimize for other (harder) cases
         return (true(), neg)
@@ -204,14 +220,6 @@ def _split_negation(neg, alias):
         # cannot split into two parts
         return (true(), neg)
     assert False, "unknown expression type: " + repr(expr)
-
-def _void_local_var(expr, var):
-    for obj in expr.iterate():
-        assert obj.is_expression
-        if obj.is_value:
-            if obj.is_reference and obj.is_variable:
-                if obj.name == var:
-                    obj.defined_at = None
 
 
 ###############################################################################
@@ -238,6 +246,11 @@ def is_true(expr):
 
 def is_false(expr):
     return expr.is_value and expr.is_literal and expr.value is False
+
+def empty_test(expr):
+    a = HplFunctionCall("len", (expr,))
+    b = HplLiteral("0", 0)
+    return HplBinaryOperator("=", a, b)
 
 def true():
     return HplLiteral("True", True)
