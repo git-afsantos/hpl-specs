@@ -634,6 +634,8 @@ class HplSimpleEvent(HplEvent):
 class HplEventDisjunction(HplEvent):
     __slots__ = ("event1", "event2")
 
+    _DUP = "topic '{}' appears multiple times in an event disjunction"
+
     def __init__(self, event1, event2):
         if not event1.is_event:
             raise TypeError("not an event: " + str(event1))
@@ -641,6 +643,7 @@ class HplEventDisjunction(HplEvent):
             raise TypeError("not an event: " + str(event2))
         self.event1 = event1 # HplEvent
         self.event2 = event2 # HplEvent
+        self._check_unique_topics()
 
     @property
     def is_event_disjunction(self):
@@ -678,6 +681,22 @@ class HplEventDisjunction(HplEvent):
 
     def clone(self):
         return HplEventDisjunction(self.event1.clone(), self.event2.clone())
+
+    def _check_unique_topics(self):
+        topics = set()
+        pending = [self.event1, self.event2]
+        while pending:
+            event = pending.pop()
+            if event.is_event_disjunction:
+                pending.append(event.event1)
+                pending.append(event.event2)
+            elif event.is_simple_event:
+                assert event.is_publish
+                if event.topic in topics:
+                    raise HplSanityError(self._DUP.format(event.topic))
+                topics.add(event.topic)
+            else:
+                assert False, "unknown event type"
 
     def __eq__(self, other):
         if not isinstance(other, HplEventDisjunction):
