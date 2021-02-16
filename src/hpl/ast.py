@@ -1483,49 +1483,88 @@ def Iff(a, b):
     return HplBinaryOperator("iff", a, b)
 
 
-def _f(*args):
+FunctionType = namedtuple("FunctionType", ("params", "output"))
+
+Parameters = namedtuple("Parameters", ("types", "var_args"))
+
+def F(*args, vargs=False):
     assert len(args) > 1
-    return (tuple(args[:-1]), args[-1])
+    params = Parameters(tuple(args[:-1]), vargs)
+    return FunctionType((params,), args[-1])
 
 
 class HplFunctionCall(HplExpression):
     __slots__ = HplExpression.__slots__ + ("function", "arguments",)
 
-    _NUM_ARGS = "function '{}' expects {} arguments, but it was given {}."
+    _SIG = "function '{}' expects {}, but got {}."
 
     # name: Input -> Output
     _BUILTINS = {
-        "abs":   _f(T_NUM, T_NUM),
-        "bool":  _f(T_PRIM, T_BOOL),
-        "int":   _f(T_PRIM, T_NUM),
-        "float": _f(T_PRIM, T_NUM),
-        "str":   _f(T_PRIM, T_STR),
-        "len":   _f(T_COMP, T_NUM),
-        "sum":   _f(T_ARR, T_NUM),
-        "prod":  _f(T_ARR, T_NUM),
-        "max":   _f(T_ARR | T_SET, T_NUM),
-        "max2":  _f(T_NUM, T_NUM, T_NUM),
-        "max3":  _f(T_NUM, T_NUM, T_NUM, T_NUM),
-        "min":   _f(T_ARR | T_SET, T_NUM),
-        "min2":  _f(T_NUM, T_NUM, T_NUM),
-        "min3":  _f(T_NUM, T_NUM, T_NUM, T_NUM),
-        "sqrt":  _f(T_NUM, T_NUM),
+        "abs":   F(T_NUM, T_NUM),
+        "bool":  F(T_PRIM, T_BOOL),
+        "int":   F(T_PRIM, T_NUM),
+        "float": F(T_PRIM, T_NUM),
+        "str":   F(T_PRIM, T_STR),
+        "len":   F(T_COMP, T_NUM),
+        "sum":   F(T_COMP, T_NUM),
+        "prod":  F(T_COMP, T_NUM),
+        "sqrt":  F(T_NUM, T_NUM),
+        "ceil":  F(T_NUM, T_NUM),
+        "floor": F(T_NUM, T_NUM),
+        "log":   F(T_NUM, T_NUM, T_NUM),
+        "sin":   F(T_NUM, T_NUM),
+        "cos":   F(T_NUM, T_NUM),
+        "tan":   F(T_NUM, T_NUM),
+        "asin":  F(T_NUM, T_NUM),
+        "acos":  F(T_NUM, T_NUM),
+        "atan":  F(T_NUM, T_NUM),
+        "atan2": F(T_NUM, T_NUM, T_NUM),
+        "deg":   F(T_NUM, T_NUM),
+        "rad":   F(T_NUM, T_NUM),
+        "x":     F(T_MSG, T_NUM),
+        "y":     F(T_MSG, T_NUM),
+        "z":     F(T_MSG, T_NUM),
+        "max": FunctionType(
+            (Parameters((T_COMP,), False),
+             Parameters((T_NUM, T_NUM), True)),
+            T_NUM
+        ),
+        "min": FunctionType(
+            (Parameters((T_COMP,), False),
+             Parameters((T_NUM, T_NUM), True)),
+            T_NUM
+        ),
+        "gcd": FunctionType(
+            (Parameters((T_COMP,), False),
+             Parameters((T_NUM, T_NUM), True)),
+            T_NUM
+        ),
+        "roll": FunctionType(
+            (Parameters((T_MSG,), False),
+             Parameters((T_NUM, T_NUM, T_NUM, T_NUM), False)),
+            T_NUM
+        ),
+        "pitch": FunctionType(
+            (Parameters((T_MSG,), False),
+             Parameters((T_NUM, T_NUM, T_NUM, T_NUM), False)),
+            T_NUM
+        ),
+        "yaw": FunctionType(
+            (Parameters((T_MSG,), False),
+             Parameters((T_NUM, T_NUM, T_NUM, T_NUM), False)),
+            T_NUM
+        ),
     }
 
     def __init__(self, fun, args):
         try:
-            types = self._BUILTINS[fun]
-            tin = types[:-1]
-            tout = types[-1]
+            function_type = self._BUILTINS[fun]
         except KeyError:
             raise HplTypeError("undefined function '{}'".format(fun))
-        HplExpression.__init__(self, types=tout)
+        HplExpression.__init__(self, types=function_type.output)
         self.function = fun # string
         self.arguments = args # [HplValue]
-        if len(args) != len(tin):
-            raise HplTypeError(self._NUM_ARGS.format(fun, len(tin), len(args)))
-        for i in range(len(args)):
-            self._type_check(args[i], tin[i])
+        self._type_check_args(function_type)
 
     @property
     def is_function_call(self):
@@ -1543,6 +1582,71 @@ class HplFunctionCall(HplExpression):
                                tuple(a.clone() for a in self.arguments))
         expr.types = self.types
         return expr
+
+    def _type_check_args(self, function_type):
+        args = self.arguments
+        nargs = len(args)
+        for params in function_type.params:
+            if params.var_args:
+                if self._match_with_var_args(params):
+                    return True
+            else:
+                if self._match_normal(params):
+                    return True
+        raise HplTypeError(self._error_msg(function_type.params))
+
+    def _match_with_var_args(self, params):
+        args = self.arguments
+        nargs = len(args)
+        nparams = len(params.types)
+        if nargs < nparams:
+            return False
+        for i in range(nparams):
+            t = params.types[i]
+            if not args[i].can_be(t):
+                return False
+        # repeat the last type indefinitely
+        for i in range(nparams, nargs):
+            t = params.types[-1]
+            if not args[i].can_be(t):
+                return False
+        # by this point, everything matches; commit the changes
+        for i in range(nparams):
+            t = params.types[i]
+            self._type_check(args[i], t)
+        for i in range(nparams, nargs):
+            t = params.types[-1]
+            self._type_check(args[i], t)
+        return True
+
+    def _match_normal(self, params):
+        args = self.arguments
+        nargs = len(args)
+        nparams = len(params.types)
+        if nargs != nparams:
+            return False
+        for i in range(nparams):
+            t = params.types[i]
+            if not args[i].can_be(t):
+                return False
+        # by this point, everything matches; commit the changes
+        for i in range(nparams):
+            t = params.types[i]
+            self._type_check(args[i], t)
+        return True
+
+    def _error_msg(self, overloads):
+        # function '{}' expects {}, but got {}.
+        sigs = []
+        for params in overloads:
+            sigs.append("({}{})".format(
+                ", ".join(type_name(t) for t in params.types),
+                "*" if params.var_args else ""
+            ))
+        sigs = " or ".join(sigs)
+        args = "({})".format(", ".join(type_name(arg.types)
+                             for arg in self.arguments))
+        return self._SIG.format(self.function, sigs, args)
 
     def __eq__(self, other):
         if not isinstance(other, HplFunctionCall):
