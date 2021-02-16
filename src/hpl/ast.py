@@ -1487,9 +1487,9 @@ FunctionType = namedtuple("FunctionType", ("params", "output"))
 
 Parameters = namedtuple("Parameters", ("types", "var_args"))
 
-def F(*args, vargs=False):
+def F(*args):
     assert len(args) > 1
-    params = Parameters(tuple(args[:-1]), vargs)
+    params = Parameters(tuple(args[:-1]), False)
     return FunctionType((params,), args[-1])
 
 
