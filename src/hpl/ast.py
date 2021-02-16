@@ -8,7 +8,7 @@
 ###############################################################################
 
 from __future__ import unicode_literals
-from builtins import object, str
+from builtins import object, range, str
 from collections import namedtuple
 from past.builtins import basestring
 
@@ -1483,33 +1483,49 @@ def Iff(a, b):
     return HplBinaryOperator("iff", a, b)
 
 
+def _f(*args):
+    assert len(args) > 1
+    return (tuple(args[:-1]), args[-1])
+
+
 class HplFunctionCall(HplExpression):
     __slots__ = HplExpression.__slots__ + ("function", "arguments",)
 
+    _NUM_ARGS = "function '{}' expects {} arguments, but it was given {}."
+
     # name: Input -> Output
     _BUILTINS = {
-        "abs": (T_NUM, T_NUM),
-        "bool": (T_PRIM, T_BOOL),
-        "int": (T_PRIM, T_NUM),
-        "float": (T_PRIM, T_NUM),
-        "str": (T_PRIM, T_STR),
-        "len": (T_COMP, T_NUM),
-        "max": (T_ARR, T_NUM),
-        "min": (T_ARR, T_NUM),
-        "sum": (T_ARR, T_NUM),
-        "prod": (T_ARR, T_NUM),
+        "abs":   _f(T_NUM, T_NUM),
+        "bool":  _f(T_PRIM, T_BOOL),
+        "int":   _f(T_PRIM, T_NUM),
+        "float": _f(T_PRIM, T_NUM),
+        "str":   _f(T_PRIM, T_STR),
+        "len":   _f(T_COMP, T_NUM),
+        "sum":   _f(T_ARR, T_NUM),
+        "prod":  _f(T_ARR, T_NUM),
+        "max":   _f(T_ARR | T_SET, T_NUM),
+        "max2":  _f(T_NUM, T_NUM, T_NUM),
+        "max3":  _f(T_NUM, T_NUM, T_NUM, T_NUM),
+        "min":   _f(T_ARR | T_SET, T_NUM),
+        "min2":  _f(T_NUM, T_NUM, T_NUM),
+        "min3":  _f(T_NUM, T_NUM, T_NUM, T_NUM),
+        "sqrt":  _f(T_NUM, T_NUM),
     }
 
     def __init__(self, fun, args):
         try:
-            tin, tout = self._BUILTINS[fun]
+            types = self._BUILTINS[fun]
+            tin = types[:-1]
+            tout = types[-1]
         except KeyError:
             raise HplTypeError("undefined function '{}'".format(fun))
         HplExpression.__init__(self, types=tout)
         self.function = fun # string
         self.arguments = args # [HplValue]
-        for arg in args:
-            self._type_check(arg, tin)
+        if len(args) != len(tin):
+            raise HplTypeError(self._NUM_ARGS.format(fun, len(tin), len(args)))
+        for i in range(len(args)):
+            self._type_check(args[i], tin[i])
 
     @property
     def is_function_call(self):
