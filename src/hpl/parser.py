@@ -214,7 +214,8 @@ class PropertyTransformer(Transformer):
     _CONSTANTS = {
         "PI": math.pi,
         "INF": INF,
-        "NAN": NAN
+        "NAN": NAN,
+        "E": math.e,
     }
 
     def number_constant(self, children):
