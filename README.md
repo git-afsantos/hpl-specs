@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/331277331.svg)](https://zenodo.org/badge/latestdoi/331277331)
+
 # HPL - The HAROS Property Specification Language
 
 HPL is a minimalistic specification language tailored for behavioural properties of message-based systems.
