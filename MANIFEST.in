@@ -1,1 +1,1 @@
-include README.md LICENSE docs/* tests/*.py
+include README.md LICENSE docs/* tests/*.py requirements.txt
