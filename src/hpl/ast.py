@@ -143,18 +143,20 @@ class HplProperty(HplAstObject):
 
     def is_fully_typed(self):
         for event in self.events():
-            if not event.predicate.is_fully_typed():
-                return False
+            for e in event.simple_events():
+                if not e.predicate.is_fully_typed():
+                    return False
         return True
 
     def refine_types(self, rostypes, aliases=None):
         # rostypes: string (topic) -> ROS Type Token
         # aliases:  string (alias) -> ROS Type Token
         for event in self.events():
-            rostype = rostypes.get(event.topic)
-            if rostype is None:
-                raise HplTypeError.undefined(event.topic)
-            event.refine_types(rostype, aliases=aliases)
+            for e in event.simple_events():
+                rostype = rostypes.get(e.topic)
+                if rostype is None:
+                    raise HplTypeError.undefined(e.topic)
+                e.refine_types(rostype, aliases=aliases)
 
     def events(self):
         if self.scope.activator is not None:
