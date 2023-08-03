@@ -1,6 +1,6 @@
 [![DOI](https://zenodo.org/badge/331277331.svg)](https://zenodo.org/badge/latestdoi/331277331)
 
-# HPL - The HAROS Property Specification Language
+# HPL - The High-Assurance Property Specification Language
 
 HPL is a minimalistic specification language tailored for behavioural properties of message-based systems.
 Although it might be useful in other contexts, it was designed with the message-passing system of the [Robot Operating System](https://www.ros.org/) in mind.
