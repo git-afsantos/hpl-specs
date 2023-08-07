@@ -1,19 +1,12 @@
-# -*- coding: utf-8 -*-
-
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
-
 
 ###############################################################################
 # Imports
 ###############################################################################
 
-import logging
-from sys import exit
-
+from hpl.ast import HplAstObject
 from hpl.parser import predicate_parser
-from hpl.exceptions import HplSanityError, HplSyntaxError, HplTypeError
-
 
 ###############################################################################
 # Predicate Examples
@@ -39,29 +32,10 @@ GOOD_PREDICATES = [
 # Test Code
 ###############################################################################
 
+
 def test_valid_predicates():
     parser = predicate_parser()
     for test_str in GOOD_PREDICATES:
-        print "\n  #", repr(test_str)
-        try:
-            ast = parser.parse(test_str)
-            print "[Parsing] OK (expected)"
-            print ""
-            print repr(ast)
-        except (HplSanityError, HplSyntaxError, HplTypeError) as e:
-            print "[Parsing] FAIL (unexpected)"
-            print "  >>", str(e)
-            return 1
-    print "\nAll", str(len(GOOD_PREDICATES)), "tests passed."
-    return 0
-
-
-def main():
-    logging.basicConfig(level=logging.DEBUG)
-    if test_valid_predicates():
-        assert False
-    return 0
-
-
-if __name__ == "__main__":
-    exit(main())
+        ast = parser.parse(test_str)
+        assert isinstance(ast, HplAstObject)
+        assert ast.is_predicate

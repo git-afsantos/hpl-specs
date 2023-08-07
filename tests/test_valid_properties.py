@@ -1,19 +1,12 @@
-# -*- coding: utf-8 -*-
-
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
-
 
 ###############################################################################
 # Imports
 ###############################################################################
 
-import logging
-from sys import exit
-
+from hpl.ast import HplProperty
 from hpl.parser import property_parser
-from hpl.exceptions import HplSanityError, HplSyntaxError, HplTypeError
-
 
 ###############################################################################
 # Property Examples
@@ -69,29 +62,9 @@ GOOD_PROPERTIES = [
 # Test Code
 ###############################################################################
 
+
 def test_valid_properties():
     parser = property_parser()
     for test_str in GOOD_PROPERTIES:
-        print "\n  #", repr(test_str)
-        try:
-            ast = parser.parse(test_str)
-            print "[Parsing] OK (expected)"
-            print ""
-            print repr(ast)
-        except (HplSanityError, HplSyntaxError, HplTypeError) as e:
-            print "[Parsing] FAIL (unexpected)"
-            print "  >>", str(e)
-            return 1
-    print "\nAll", str(len(GOOD_PROPERTIES)), "tests passed."
-    return 0
-
-
-def main():
-    logging.basicConfig(level=logging.DEBUG)
-    if test_valid_properties():
-        assert False
-    return 0
-
-
-if __name__ == "__main__":
-    exit(main())
+        ast = parser.parse(test_str)
+        assert isinstance(ast, HplProperty)

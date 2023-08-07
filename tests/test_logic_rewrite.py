@@ -1,21 +1,14 @@
-# -*- coding: utf-8 -*-
-
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
-
 
 ###############################################################################
 # Imports
 ###############################################################################
 
-import logging
-from sys import exit
-
 from hpl.logic import (
     is_true, replace_this_with_var, replace_var_with_this, refactor_reference
 )
 from hpl.parser import predicate_parser
-
 
 ###############################################################################
 # Predicate Examples
@@ -70,78 +63,58 @@ REF_WITH_SPLITS = [
 # Test Code
 ###############################################################################
 
-def test_refactor_reference():
+
+def test_refactor_but_no_references():
     parser = predicate_parser()
     for test_str in NO_REFS:
-        print "\n  #", repr(test_str)
         expr = parser.parse(test_str)
         phi, psi = refactor_reference(expr, "B")
         assert phi.is_expression
         assert psi.is_expression
-        print "[Refactor] output:"
-        print "  1:", phi
-        print "  2:", psi
         assert phi is expr
         assert is_true(psi)
+
+
+def test_refactor_references_but_no_splits():
+    parser = predicate_parser()
     for test_str in REF_BUT_NO_SPLITS:
-        print "\n  #", repr(test_str)
         expr = parser.parse(test_str)
         phi, psi = refactor_reference(expr, "B")
         assert phi.is_expression
         assert psi.is_expression
-        print "[Refactor] output:"
-        print "  1:", phi
-        print "  2:", psi
         #assert psi is expr
         assert is_true(phi)
+
+
+def test_refactor_references_with_splits():
+    parser = predicate_parser()
     for test_str in REF_WITH_SPLITS:
-        print "\n  #", repr(test_str)
         expr = parser.parse(test_str)
         phi, psi = refactor_reference(expr, "B")
         assert phi.is_expression
         assert psi.is_expression
-        print "[Refactor] output:"
-        print "  1:", phi
-        print "  2:", psi
         assert phi != expr
         assert psi != expr
         assert not is_true(phi)
         assert not is_true(psi)
-    n = len(NO_REFS) + len(REF_BUT_NO_SPLITS) + len(REF_WITH_SPLITS)
-    print "\nAll", str(n), "tests passed."
 
-def test_replace_this_msg():
+
+def test_replace_this_msg_but_no_splits():
     parser = predicate_parser()
     for test_str in REF_BUT_NO_SPLITS:
-        print "\n  #", repr(test_str)
         expr = parser.parse(test_str)
         phi, psi = refactor_reference(expr, "B")
         assert is_true(phi)
         replace_this_with_var(psi, "A")
         replace_var_with_this(psi, "B")
-        print "[Replace] output:"
-        print "   2:", psi
+
+
+def test_replace_this_msg_with_splits():
+    parser = predicate_parser()
     for test_str in REF_WITH_SPLITS:
-        print "\n  #", repr(test_str)
         expr = parser.parse(test_str)
         phi, psi = refactor_reference(expr, "B")
         assert not is_true(phi)
         assert not is_true(psi)
         replace_this_with_var(psi, "A")
         replace_var_with_this(psi, "B")
-        print "[Replace] output:"
-        print "  1:", phi
-        print "  2:", psi
-    n = len(REF_BUT_NO_SPLITS) + len(REF_WITH_SPLITS)
-    print "\nAll", str(n), "tests passed."
-
-
-def main():
-    logging.basicConfig(level=logging.DEBUG)
-    test_refactor_reference()
-    test_replace_this_msg()
-    return 0
-
-
-if __name__ == "__main__":
-    exit(main())
