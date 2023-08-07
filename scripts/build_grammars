@@ -1,66 +1,57 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
 
-import os
-try:
-    import regex as re
-except ImportError:
-    import re
+###############################################################################
+# Imports
+###############################################################################
 
-preamble = re.compile(r"\s*//\s*SPDX-License-Identifier:[^\n]+"
-                      r"\s*//\s*Copyright[^\n]+\s*")
+from pathlib import Path
+import re
 
-# where this script is
-path = os.path.dirname(os.path.realpath(__file__))
-# parent dir
-path = os.path.abspath(os.path.join(path, os.pardir))
-# go to src/hpl/grammars
-path = os.path.join(path, "src", "hpl", "grammars")
+###############################################################################
+# Constants
+###############################################################################
+
+HERE = Path(__file__).parent
+GRAMMARS = HERE / 'src' / 'hpl' / 'grammars'
+
+PREAMBLE = re.compile(r'\s*//\s*SPDX-License-Identifier:[^\n]+'
+                      r'\s*//\s*Copyright[^\n]+\s*')
 
 def skip_preamble(text):
-    m = preamble.match(text)
+    m = PREAMBLE.match(text)
     if m:
         return text[m.end():]
     return text
 
-with open(os.path.join(path, "tokens.lark"), "r") as f:
-    g_tokens = skip_preamble(f.read())
+path = GRAMMARS / 'tokens.lark'
+g_tokens = skip_preamble(path.read_text(encoding='utf8'))
 
-with open(os.path.join(path, "predicates.lark"), "r") as f:
-    g_predicates = skip_preamble(f.read())
+path = GRAMMARS / 'predicates.lark'
+g_predicates = skip_preamble(path.read_text(encoding='utf8'))
 
-with open(os.path.join(path, "properties.lark"), "r") as f:
-    g_properties = skip_preamble(f.read())
+path = GRAMMARS / 'properties.lark'
+g_properties = skip_preamble(path.read_text(encoding='utf8'))
 
-with open(os.path.join(path, "files.lark"), "r") as f:
-    g_files = skip_preamble(f.read())
+path = GRAMMARS / 'files.lark'
+g_files = skip_preamble(path.read_text(encoding='utf8'))
 
-GRAMMAR_PY = '''\
-# -*- coding: utf-8 -*-
-
+GRAMMAR_PY = f"""\
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
 
-PREDICATE_GRAMMAR = r"""
-{predicate_grammar}
-{token_grammar}
+PREDICATE_GRAMMAR = r'''
+{g_predicates}
+{g_tokens}
+'''
+
+HPL_GRAMMAR = r'''
+{g_files}
+{g_properties}
+{g_predicates}
+{g_tokens}
+'''
 """
 
-HPL_GRAMMAR = r"""
-{file_grammar}
-{property_grammar}
-{predicate_grammar}
-{token_grammar}
-"""
-'''.format(
-    token_grammar=g_tokens,
-    predicate_grammar=g_predicates,
-    property_grammar=g_properties,
-    file_grammar=g_files
-)
-
-with open(os.path.join(path, os.pardir, "grammar.py"), "w") as f:
-    f.write(GRAMMAR_PY)
+path = HERE / 'src' / 'hpl' / 'grammar.py'
+path.write_text(GRAMMAR_PY, encoding='utf8')
