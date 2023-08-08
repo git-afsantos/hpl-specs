@@ -8,7 +8,6 @@
 ###############################################################################
 
 from __future__ import unicode_literals
-from past.builtins import basestring
 
 from .ast import (
     And, Forall, Or, Not, T_MSG,
@@ -36,7 +35,7 @@ def replace_this_with_var(predicate_or_expression, alias):
             and not predicate_or_expression.is_expression):
         raise TypeError("expected HplPredicate or HplExpression: "
                         + repr(predicate_or_expression))
-    if not isinstance(alias, basestring):
+    if not isinstance(alias, str):
         raise TypeError("expected string alias: " + repr(alias))
     if predicate_or_expression.is_predicate:
         if predicate_or_expression.is_vacuous:
@@ -59,7 +58,7 @@ def replace_var_with_this(predicate_or_expression, alias):
             and not predicate_or_expression.is_expression):
         raise TypeError("expected HplPredicate or HplExpression: "
                         + repr(predicate_or_expression))
-    if not isinstance(alias, basestring):
+    if not isinstance(alias, str):
         raise TypeError("expected string alias: " + repr(alias))
     if predicate_or_expression.is_predicate:
         if predicate_or_expression.is_vacuous:
@@ -83,7 +82,7 @@ def refactor_reference(predicate_or_expression, alias):
             and not predicate_or_expression.is_expression):
         raise TypeError("expected HplPredicate or HplExpression: "
                         + repr(predicate_or_expression))
-    if not isinstance(alias, basestring):
+    if not isinstance(alias, str):
         raise TypeError("expected string alias: " + repr(alias))
     if predicate_or_expression.is_predicate:
         return _refactor_ref_pred(predicate_or_expression, alias)
