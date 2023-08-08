@@ -73,6 +73,7 @@ setup(
     },
     python_requires='>=3.8, <4',
     install_requires=[
+        'attrs>=23.0',
         'lark>=1.0',
     ],
     extras_require={
