@@ -8,7 +8,7 @@
 from pytest import raises
 
 from hpl.parser import property_parser
-from hpl.exceptions import HplSanityError, HplSyntaxError, HplTypeError
+from hpl.errors import HplSanityError, HplSyntaxError, HplTypeError
 
 
 ###############################################################################
