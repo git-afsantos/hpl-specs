@@ -7,8 +7,6 @@
 # Imports
 ###############################################################################
 
-from __future__ import unicode_literals
-from builtins import object
 import math
 
 from lark import Lark, Transformer
@@ -16,13 +14,13 @@ from lark.exceptions import UnexpectedCharacters, UnexpectedToken
 
 from .ast import (
     HplSpecification, HplProperty, HplScope, HplPattern, HplSimpleEvent,
-    HplExpression, HplPredicate, HplVacuousTruth, HplQuantifier,
+    HplPredicate, HplVacuousTruth, HplQuantifier,
     HplUnaryOperator, HplBinaryOperator, HplSet, HplRange, HplLiteral,
     HplVarReference, HplFunctionCall, HplFieldAccess, HplArrayAccess,
     HplThisMessage, HplEventDisjunction
 )
 from .grammar import PREDICATE_GRAMMAR, HPL_GRAMMAR
-from .exceptions import HplSyntaxError
+from .errors import HplSyntaxError
 
 
 ###############################################################################
