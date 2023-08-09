@@ -5,15 +5,16 @@
 # Imports
 ###############################################################################
 
-from typing import Any, Callable, Iterable, Optional, Set, Tuple, Union
+from typing import Any, Callable, Final, Iterable, Optional, Set, Tuple, Type, Union
 
-from enum import auto, Flag
+from enum import Enum, auto, Flag, unique
 
 from attrs import evolve, field, frozen
 from attrs.validators import deep_iterable, instance_of
 
 from hpl.ast.base import HplAstObject
-from hpl.errors import HplTypeError, invalid_type
+from hpl.errors import HplSanityError, HplTypeError
+from hpl.grammar import ALL_OPERATOR, AND_OPERATOR, IFF_OPERATOR, IMPLIES_OPERATOR, IN_OPERATOR, NOT_OPERATOR, OR_OPERATOR, SOME_OPERATOR
 
 ###############################################################################
 # Type System
@@ -40,6 +41,13 @@ class DataType(Flag):
     ITEM = BOOL | NUMBER | STRING | MESSAGE
     COMPOUND = ARRAY | RANGE | SET
     ANY = BOOL | NUMBER | STRING | ARRAY | RANGE | SET | MESSAGE
+
+    @staticmethod
+    def union(types: Iterable['DataType']) -> 'DataType':
+        result = DataType.NONE
+        for t in types:
+            result = result | t
+        return result
 
     @property
     def pretty_name(self) -> str:
@@ -110,6 +118,10 @@ class HplExpression(HplAstObject):
         self.default_data_type.cast(value)
 
     @property
+    def default_data_type(self) -> DataType:
+        return DataType.ANY
+
+    @property
     def is_expression(self) -> bool:
         return True
 
@@ -132,10 +144,6 @@ class HplExpression(HplAstObject):
     @property
     def is_accessor(self) -> bool:
         return False
-
-    @property
-    def default_data_type(self) -> DataType:
-        return DataType.ANY
 
     @property
     def can_be_bool(self) -> bool:
@@ -213,11 +221,19 @@ class HplExpression(HplAstObject):
                 return True
         return False
 
+    def contains_definition(self, alias: str) -> bool:
+        for obj in self.iterate():
+            assert obj.is_expression
+            if obj.is_quantifier:
+                if obj.variable == alias:
+                    return True
+        return False
 
-def _expr_type_converter(t: DataType) -> Callable[[HplExpression], HplExpression]:
-    def converter(expr: HplExpression) -> HplExpression:
-        return expr.cast(t)
-    return converter
+
+def _type_checker(t: DataType) -> Callable[[HplExpression, Any, HplExpression], None]:
+    def validator(self: HplExpression, _attribute: Any, expr: HplExpression):
+        self._type_check(expr, t)
+    return validator
 
 
 ###############################################################################
@@ -282,10 +298,7 @@ class HplSet(HplValue):
 
     @property
     def subtypes(self) -> DataType:
-        t = DataType.NONE
-        for value in self.values:
-            t = t | value.data_type
-        return t
+        return DataType.union(value.data_type for value in self.values)
 
     def to_set(self) -> Set[HplValue]:
         return set(self.values)
@@ -380,7 +393,6 @@ class HplThisMessage(HplValue):
 @frozen
 class HplVarReference(HplValue):
     token: str
-    defined_at: Any = None
     message_type: Any = None
 
     @property
@@ -399,10 +411,6 @@ class HplVarReference(HplValue):
     def name(self) -> str:
         return self.token[1:]  # remove lead "@"
 
-    @property
-    def is_defined(self) -> bool:
-        return self.defined_at is not None
-
     def __str__(self) -> str:
         return self.token
 
@@ -410,6 +418,26 @@ class HplVarReference(HplValue):
 ###############################################################################
 # Quantifiers
 ###############################################################################
+
+
+class QuantifierType(Enum):
+    ALL = ALL_OPERATOR
+    SOME = SOME_OPERATOR
+
+    @property
+    def name(self) -> str:
+        return self.value
+
+    @property
+    def token(self) -> str:
+        return self.value
+
+    def __str__(self) -> str:
+        return self.value
+
+
+def _convert_quantifier_type(t: Union[str, QuantifierType]) -> QuantifierType:
+    return t if isinstance(t, QuantifierType) else QuantifierType(t)
 
 
 def _convert_quantifier_domain(expr: HplExpression) -> HplExpression:
@@ -422,386 +450,716 @@ def _convert_quantifier_condition(expr: HplExpression) -> HplExpression:
 
 @frozen
 class HplQuantifier(HplExpression):
-    quantifier: str
+    quantifier: QuantifierType = field(converter=_convert_quantifier_type)
     variable: str
     domain: HplExpression = field(converter=_convert_quantifier_domain)
     condition: HplExpression = field(converter=_convert_quantifier_condition)
 
-    _SET_REF = "cannot reference quantified variable '{}' in the domain of:\n{}"
-    _MULTI_DEF = "multiple definitions of variable '{}' in:\n{}"
-    _UNUSED = "quantified variable '{}' is never used in:\n{}"
+    @classmethod
+    def forall(cls, var: str, dom: HplExpression, phi: HplExpression ) -> 'HplQuantifier':
+        return cls(quantifier=QuantifierType.ALL, variable=var, domain=dom, condition=phi)
 
-    def __init__(self, qt, var, dom, p, shadow=False):
-        HplExpression.__init__(self, types=T_BOOL)
-        self._type_check(dom, T_COMP)
-        self._type_check(p, T_BOOL)
-        self._check_variables(shadow)
+    @classmethod
+    def exists(cls, var: str, dom: HplExpression, phi: HplExpression) -> 'HplQuantifier':
+        return cls(quantifier=QuantifierType.SOME, variable=var, domain=dom, condition=phi)
+
+    @domain.validator
+    def _check_domain(self, _attribute, domain: HplExpression):
+        # 1. must be a compound type
+        self._type_check(domain, DataType.COMPOUND)
+
+        # 2. must not reference the quantified variable
+        for obj in domain.iterate():
+            assert obj.is_expression
+            if obj.is_value and obj.is_variable:
+                # assert not obj.is_defined
+                if self.variable == obj.name:
+                    raise HplSanityError((
+                        f"cannot reference quantified variable '{obj.name}'"
+                        f" in the domain of «{self}»"
+                    ))
+
+    @condition.validator
+    def _check_condition_is_bool(self, _attribute, condition: HplExpression):
+        # 1. must be a boolean expression
+        self._type_check(condition, DataType.BOOL)
+
+        # 2. must not redefine the quantified variable
+        # 3. must assume the variable is of the type of domain elements
+        v: str = self.variable
+        t: DataType = DataType.PRIMITIVE
+        if self.domain.is_value and (self.domain.is_set or self.domain.is_range):
+            t = self.domain.subtypes
+        used: int = 0
+
+        for obj in condition.iterate():
+            assert obj.is_expression
+            if obj.is_quantifier:
+                if obj.variable == v:
+                    raise HplSanityError(f"multiple definitions of variable '{v}' in «{self}»")
+            elif obj.is_value and obj.is_variable:
+                if obj.name == v:
+                    self._type_check(obj, t)
+                    used += 1
+
+        # 4. must reference the quantified variable at least once
+        if not used:
+            raise HplSanityError(f"quantified variable '{v}' is never used in «{self}»")
 
     @property
-    def is_quantifier(self):
+    def default_data_type(self) -> DataType:
+        return DataType.BOOL
+
+    @property
+    def is_quantifier(self) -> bool:
         return True
 
     @property
-    def is_universal(self):
-        return self.quantifier == "forall"
+    def is_universal(self) -> bool:
+        return self.quantifier is QuantifierType.ALL
 
     @property
     def is_existential(self):
-        return self.quantifier == "exists"
+        return self.quantifier is QuantifierType.SOME
 
     @property
-    def op(self):
+    def op(self) -> QuantifierType:
         return self.quantifier
 
     @property
-    def x(self):
+    def x(self) -> str:
         return self.variable
 
     @property
-    def d(self):
+    def d(self) -> HplExpression:
         return self.domain
 
     @property
-    def p(self):
+    def p(self) -> HplExpression:
         return self.condition
 
     @property
-    def phi(self):
+    def phi(self) -> HplExpression:
         return self.condition
 
-    def children(self):
+    def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.domain, self.condition)
 
-    def clone(self):
-        expr = HplQuantifier(self.quantifier, self.variable,
-                             self.domain.clone(), self.condition.clone(),
-                             shadow=True)
-        expr.types = self.types
-        return expr
-
-    def _check_variables(self, shadow):
-        types = self._check_domain_vars()
-        self._check_expression_vars(types, shadow)
-
-    def _check_domain_vars(self):
-        dom = self.domain
-        for obj in dom.iterate():
-            assert obj.is_expression
-            if obj.is_value and obj.is_variable:
-                assert not obj.is_defined
-                v = obj.name
-                if self.variable == v:
-                    raise HplSanityError(self._SET_REF.format(v, self))
-        if dom.is_value:
-            if dom.is_set or dom.is_range:
-                return dom.subtypes
-        return T_PRIM
-
-    def _check_expression_vars(self, t, shadow):
-        uid = id(self)
-        used = 0
-        for obj in self.condition.iterate():
-            assert obj.is_expression
-            if obj.is_value and obj.is_variable:
-                v = obj.name
-                if self.variable == v:
-                    if obj.is_defined and not shadow:
-                        assert obj.defined_at != uid
-                        raise HplSanityError(self._MULTI_DEF.format(v, self))
-                    obj.defined_at = uid
-                    self._type_check(obj, t)
-                    used += 1
-        if not used:
-            raise HplSanityError(self._UNUSED.format(self.variable, self))
-
-    def __eq__(self, other):
-        if not isinstance(other, HplQuantifier):
-            return False
-        return (self.quantifier == other.quantifier
-                and self.variable == other.variable
-                and self.domain == other.domain
-                and self.condition == other.condition)
-
-    def __hash__(self):
-        h = 31 * hash(self.quantifier) + hash(self.variable)
-        h = 31 * h + hash(self.domain)
-        h = 31 * h + hash(self.condition)
-        return h
-
-    def __str__(self):
-        return "({} {} in {}: {})".format(self.quantifier, self.variable,
-            self.domain, self.condition)
-
-    def __repr__(self):
-        return "{}({}, {}, {}, {})".format(
-            type(self).__name__, repr(self.quantifier), repr(self.variable),
-            repr(self.domain), repr(self.condition))
+    def __str__(self) -> str:
+        return f'({self.op} {self.x} in {self.d}: {self.p})'
 
 
-def Forall(x, dom, phi, shadow=False):
-    return HplQuantifier("forall", x, dom, phi, shadow=shadow)
-
-def Exists(x, dom, phi, shadow=False):
-    return HplQuantifier("exists", x, dom, phi, shadow=shadow)
+Forall: Final[Callable[[str, HplExpression, HplExpression], HplQuantifier]] = HplQuantifier.forall
+Exists: Final[Callable[[str, HplExpression, HplExpression], HplQuantifier]] = HplQuantifier.exists
 
 
 ###############################################################################
 # Operators and Functions
 ###############################################################################
 
-class HplUnaryOperator(HplExpression):
-    __slots__ = HplExpression.__slots__ + ("operator", "operand")
 
-    _OPS = {
-        "-": (T_NUM, T_NUM),
-        "not": (T_BOOL, T_BOOL)
-    }
+@frozen
+class UnaryOperatorDefinition:
+    token: str
+    parameter: DataType
+    result: DataType
 
-    def __init__(self, op, arg):
-        tin, tout = self._OPS[op]
-        HplExpression.__init__(self, types=tout)
-        self.operator = op # string
-        self.operand = arg # HplExpression
-        self._type_check(arg, tin)
+    @classmethod
+    def minus(cls) -> 'UnaryOperatorDefinition':
+        return cls('-', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def negation(cls) -> 'UnaryOperatorDefinition':
+        return cls(NOT_OPERATOR, DataType.BOOL, DataType.BOOL)
 
     @property
-    def is_operator(self):
+    def name(self) -> str:
+        return self.token
+
+    def __str__(self) -> str:
+        return self.token
+
+
+@unique
+class BuiltinUnaryOperator(Enum):
+    '''Set of built-in operators.'''
+
+    MINUS = UnaryOperatorDefinition.minus()
+    NOT = UnaryOperatorDefinition.negation()
+
+    @property
+    def name(self) -> str:
+        return self.value.token
+
+    @property
+    def token(self) -> str:
+        return self.value.token
+
+    def __str__(self) -> str:
+        return self.value.token
+
+
+def _convert_unary_operator(
+    op: Union[str, BuiltinUnaryOperator, UnaryOperatorDefinition]
+) -> UnaryOperatorDefinition:
+    if isinstance(op, UnaryOperatorDefinition):
+        return op
+    if isinstance(op, BuiltinUnaryOperator):
+        return op.value
+    for member in BuiltinUnaryOperator.__members__.values():
+        if member.token == op:
+            return member
+    raise ValueError(f'{op!r} is not a valid unary operator')
+
+
+@frozen
+class HplUnaryOperator(HplExpression):
+    operator: UnaryOperatorDefinition = field(converter=_convert_unary_operator)
+    operand: HplExpression = field(validator=instance_of(HplExpression))
+
+    @classmethod
+    def minus(cls, operand: HplExpression) -> 'HplUnaryOperator':
+        return cls(operator=BuiltinUnaryOperator.MINUS, operand=operand)
+
+    @classmethod
+    def negation(cls, operand: HplExpression) -> 'HplUnaryOperator':
+        return cls(operator=BuiltinUnaryOperator.NOT, operand=operand)
+
+    @operand.validator
+    def _check_operand(self, _attribute, arg: HplExpression):
+        self._type_check(arg, self.operator.parameter)
+
+    def __attrs_post_init__(self):
+        object.__setattr__(self, 'data_type', self.operator.result)
+
+    @property
+    def is_operator(self) -> bool:
         return True
 
     @property
-    def arity(self):
+    def arity(self) -> int:
         return 1
 
     @property
-    def op(self):
+    def op(self) -> UnaryOperatorDefinition:
         return self.operator
 
     @property
-    def a(self):
+    def a(self) -> HplExpression:
         return self.operand
 
-    def children(self):
+    @property
+    def parameter_type(self) -> DataType:
+        return self.operator.parameter
+
+    def children(self) -> Tuple[HplExpression]:
         return (self.operand,)
 
-    def clone(self):
-        expr = HplUnaryOperator(self.operator, self.operand.clone())
-        expr.types = self.types
-        return expr
-
-    def __eq__(self, other):
-        if not isinstance(other, HplUnaryOperator):
-            return False
-        return (self.operator == other.operator
-                and self.operand == other.operand)
-
-    def __hash__(self):
-        return 31 * hash(self.operator) + hash(self.operand)
-
-    def __str__(self):
-        op = self.operator
+    def __str__(self) -> str:
+        op: str = self.operator.token
         if op and op[-1].isalpha():
-            op = op + " "
-        return "({}{})".format(op, self.operand)
-
-    def __repr__(self):
-        return "{}({}, {})".format(
-            type(self).__name__, repr(self.operator), repr(self.operand))
+            op = op + ' '
+        return f'({op}{self.operand})'
 
 
-def Not(a):
-    return HplUnaryOperator("not", a)
+Not: Final[Callable[[HplExpression], HplUnaryOperator]] = HplUnaryOperator.negation
 
 
-class HplBinaryOperator(HplExpression):
-    __slots__ = HplExpression.__slots__ + (
-        "operator", "operand1", "operand2", "infix", "commutative")
+@frozen
+class BinaryOperatorDefinition:
+    token: str
+    parameter1: DataType
+    parameter2: DataType
+    result: DataType
+    infix: bool = True
+    commutative: bool = False
 
-    # operator: (Input -> Input -> Output), infix, commutative
-    _OPS = {
-        "+": (T_NUM, T_NUM, T_NUM, True, True),
-        "-": (T_NUM, T_NUM, T_NUM, True, False),
-        "*": (T_NUM, T_NUM, T_NUM, True, True),
-        "/": (T_NUM, T_NUM, T_NUM, True, False),
-        "**": (T_NUM, T_NUM, T_NUM, True, False),
-        "implies": (T_BOOL, T_BOOL, T_BOOL, True, False),
-        "iff": (T_BOOL, T_BOOL, T_BOOL, True, True),
-        "or": (T_BOOL, T_BOOL, T_BOOL, True, True),
-        "and": (T_BOOL, T_BOOL, T_BOOL, True, True),
-        "=": (T_PRIM, T_PRIM, T_BOOL, True, True),
-        "!=": (T_PRIM, T_PRIM, T_BOOL, True, True),
-        "<": (T_NUM, T_NUM, T_BOOL, True, False),
-        "<=": (T_NUM, T_NUM, T_BOOL, True, False),
-        ">": (T_NUM, T_NUM, T_BOOL, True, False),
-        ">=": (T_NUM, T_NUM, T_BOOL, True, False),
-        "in": (T_PRIM, T_SET | T_RAN, T_BOOL, True, False),
-    }
+    @classmethod
+    def addition(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.NUMBER
+        return cls('+', t, t, t, infix=True, commutative=True)
 
-    def __init__(self, op, arg1, arg2):
-        tin1, tin2, tout, infix, comm = self._OPS[op]
-        HplExpression.__init__(self, types=tout)
-        self.operator = op # string
-        self.operand1 = arg1 # HplExpression
-        self.operand2 = arg2 # HplExpression
-        self.infix = infix # bool
-        self.commutative = comm # bool
-        self._type_check(arg1, tin1)
-        self._type_check(arg2, tin2)
+    @classmethod
+    def subtraction(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.NUMBER
+        return cls('-', t, t, t, infix=True, commutative=False)
+
+    @classmethod
+    def multiplication(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.NUMBER
+        return cls('*', t, t, t, infix=True, commutative=True)
+
+    @classmethod
+    def division(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.NUMBER
+        return cls('/', t, t, t, infix=True, commutative=False)
+
+    @classmethod
+    def power(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.NUMBER
+        return cls('**', t, t, t, infix=True, commutative=False)
+
+    @classmethod
+    def implication(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.BOOL
+        return cls(IMPLIES_OPERATOR, t, t, t, infix=True, commutative=False)
+
+    @classmethod
+    def equivalence(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.BOOL
+        return cls(IFF_OPERATOR, t, t, t, infix=True, commutative=True)
+
+    @classmethod
+    def disjunction(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.BOOL
+        return cls(OR_OPERATOR, t, t, t, infix=True, commutative=True)
+
+    @classmethod
+    def conjunction(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.BOOL
+        return cls(AND_OPERATOR, t, t, t, infix=True, commutative=True)
+
+    @classmethod
+    def equality(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.PRIMITIVE
+        return cls('=', t, t, DataType.BOOL, infix=True, commutative=True)
+
+    @classmethod
+    def inequality(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.PRIMITIVE
+        return cls('!=', t, t, DataType.BOOL, infix=True, commutative=True)
+
+    @classmethod
+    def less_than(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.NUMBER
+        return cls('<', t, t, DataType.BOOL, infix=True, commutative=False)
+
+    @classmethod
+    def less_than_eq(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.NUMBER
+        return cls('<=', t, t, DataType.BOOL, infix=True, commutative=False)
+
+    @classmethod
+    def greater_than(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.NUMBER
+        return cls('>', t, t, DataType.BOOL, infix=True, commutative=False)
+
+    @classmethod
+    def greater_than_eq(cls) -> 'BinaryOperatorDefinition':
+        t = DataType.NUMBER
+        return cls('>=', t, t, DataType.BOOL, infix=True, commutative=False)
+
+    @classmethod
+    def inclusion(cls) -> 'BinaryOperatorDefinition':
+        t1 = DataType.PRIMITIVE
+        t2 = DataType.COMPOUND
+        t3 = DataType.BOOL
+        return cls(IN_OPERATOR, t1, t2, t3, infix=True, commutative=False)
 
     @property
-    def is_operator(self):
+    def name(self) -> str:
+        return self.token
+
+    @property
+    def parameters(self) -> Tuple[DataType, DataType]:
+        return (self.parameter1, self.parameter2)
+
+    def __str__(self) -> str:
+        return self.token
+
+
+@unique
+class BuiltinBinaryOperator(Enum):
+    '''Set of supported operators.'''
+
+    ADD = BinaryOperatorDefinition.addition()
+    SUB = BinaryOperatorDefinition.subtraction()
+    MULT = BinaryOperatorDefinition.multiplication()
+    DIV = BinaryOperatorDefinition.division()
+    POW = BinaryOperatorDefinition.power()
+    IMP = BinaryOperatorDefinition.implication()
+    IFF = BinaryOperatorDefinition.equivalence()
+    OR = BinaryOperatorDefinition.disjunction()
+    AND = BinaryOperatorDefinition.conjunction()
+    EQ = BinaryOperatorDefinition.equality()
+    NEQ = BinaryOperatorDefinition.inequality()
+    LT = BinaryOperatorDefinition.less_than()
+    LTE = BinaryOperatorDefinition.less_than_eq()
+    GT = BinaryOperatorDefinition.greater_than()
+    GTE = BinaryOperatorDefinition.greater_than_eq()
+    IN = BinaryOperatorDefinition.inclusion()
+
+    @property
+    def name(self) -> str:
+        return self.value.token
+
+    @property
+    def token(self) -> str:
+        return self.value.token
+
+    def __str__(self) -> str:
+        return self.value.token
+
+
+def _convert_binary_operator(
+    op: Union[str, BuiltinBinaryOperator, BinaryOperatorDefinition]
+) -> BinaryOperatorDefinition:
+    if isinstance(op, BinaryOperatorDefinition):
+        return op
+    if isinstance(op, BuiltinBinaryOperator):
+        return op.value
+    for member in BuiltinBinaryOperator.__members__.values():
+        if member.token == op:
+            return member
+    raise ValueError(f'{op!r} is not a valid binary operator')
+
+
+@frozen
+class HplBinaryOperator(HplExpression):
+    operator: BinaryOperatorDefinition = field(converter=_convert_binary_operator)
+    operand1: HplExpression = field(validator=instance_of(HplExpression))
+    operand2: HplExpression = field(validator=instance_of(HplExpression))
+
+    @classmethod
+    def conjunction(cls, a: HplExpression, b: HplExpression) -> 'HplBinaryOperator':
+        return cls(operator=BuiltinBinaryOperator.AND, operand1=a, operand2=b)
+
+    @classmethod
+    def disjunction(cls, a: HplExpression, b: HplExpression) -> 'HplBinaryOperator':
+        return cls(operator=BuiltinBinaryOperator.OR, operand1=a, operand2=b)
+
+    @classmethod
+    def implication(cls, a: HplExpression, b: HplExpression) -> 'HplBinaryOperator':
+        return cls(operator=BuiltinBinaryOperator.IMP, operand1=a, operand2=b)
+
+    @classmethod
+    def equivalence(cls, a: HplExpression, b: HplExpression) -> 'HplBinaryOperator':
+        return cls(operator=BuiltinBinaryOperator.IFF, operand1=a, operand2=b)
+
+    @operand1.validator
+    def _check_operand1(self, _attribute, arg: HplExpression):
+        self._type_check(arg, self.operator.parameter1)
+
+    @operand2.validator
+    def _check_operand2(self, _attribute, arg: HplExpression):
+        self._type_check(arg, self.operator.parameter2)
+
+    def __attrs_post_init__(self):
+        object.__setattr__(self, 'data_type', self.operator.result)
+
+    @property
+    def is_operator(self) -> bool:
         return True
 
     @property
-    def arity(self):
+    def arity(self) -> int:
         return 2
 
     @property
-    def op(self):
+    def op(self) -> BinaryOperatorDefinition:
         return self.operator
 
     @property
-    def a(self):
+    def a(self) -> HplExpression:
         return self.operand1
 
     @property
-    def b(self):
+    def b(self) -> HplExpression:
         return self.operand2
 
-    def children(self):
+    @property
+    def is_infix(self) -> bool:
+        return self.operator.infix
+
+    @property
+    def is_commutative(self) -> bool:
+        return self.operator.commutative
+
+    @property
+    def parameter1_type(self) -> DataType:
+        return self.operator.parameter1
+
+    @property
+    def parameter2_type(self) -> DataType:
+        return self.operator.parameter2
+
+    def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.operand1, self.operand2)
 
-    def clone(self):
-        expr = HplBinaryOperator(self.operator, self.operand1.clone(),
-                                 self.operand2.clone())
-        expr.types = self.types
-        return expr
-
-    def __eq__(self, other):
-        if not isinstance(other, HplBinaryOperator):
-            return False
-        if self.operator != other.operator:
-            return False
-        a = self.operand1
-        b = self.operand2
-        x = other.operand1
-        y = other.operand2
-        if self.commutative:
-            return (a == x and b == y) or (a == y and b == x)
-        return a == x and b == y
-
-    def __hash__(self):
-        h = 31 * hash(self.operator) + hash(self.operand1)
-        h = 31 * h + hash(self.operand2)
-        return h
-
-    def __str__(self):
-        a = str(self.operand1)
-        b = str(self.operand2)
-        if self.infix:
-            return "({} {} {})".format(a, self.operator, b)
+    def __str__(self) -> str:
+        if self.is_infix:
+            return f'({self.operand1} {self.operator} {self.operand2})'
         else:
-            return "{}({}, {})".format(self.operator, a, b)
-
-    def __repr__(self):
-        return "{}({}, {}, {})".format(
-            type(self).__name__, repr(self.operator),
-            repr(self.operand1), repr(self.operand2))
+            return f'{self.operator}({self.operand1}, {self.operand2})'
 
 
-def And(a, b):
-    return HplBinaryOperator("and", a, b)
+# necessary alias to shorten the following lines
+BinOp: Final[Type[HplBinaryOperator]] = HplBinaryOperator
 
-def Or(a, b):
-    return HplBinaryOperator("or", a, b)
-
-def Implies(a, b):
-    return HplBinaryOperator("implies", a, b)
-
-def Iff(a, b):
-    return HplBinaryOperator("iff", a, b)
+And: Final[Callable[[HplExpression, HplExpression], HplBinaryOperator]] = BinOp.conjunction
+Or: Final[Callable[[HplExpression, HplExpression], HplBinaryOperator]] = BinOp.disjunction
+Implies: Final[Callable[[HplExpression, HplExpression], HplBinaryOperator]] = BinOp.implication
+Iff: Final[Callable[[HplExpression, HplExpression], HplBinaryOperator]] = BinOp.equivalence
 
 
-FunctionType = namedtuple("FunctionType", ("params", "output"))
+@frozen
+class FunctionSignature:
+    '''Each of these objects represents a function overload.'''
 
-Parameters = namedtuple("Parameters", ("types", "var_args"))
+    parameters: Tuple[DataType]
+    result: DataType
+    variadic: Optional[DataType] = None  # type of variadic parameters
 
-def F(*args):
-    assert len(args) > 1
-    params = Parameters(tuple(args[:-1]), False)
-    return FunctionType((params,), args[-1])
+    @property
+    def is_variadic(self) -> bool:
+        return self.variadic is not None
+
+    @property
+    def arity(self) -> int:
+        return len(self.parameters)
+
+    def accepts(self, args: Iterable[DataType]) -> bool:
+        if not isinstance(args, (tuple, list)):
+            args = tuple(args)
+        n = len(args)
+        arity = self.arity
+        if arity > n:
+            return False
+        if arity < n and not self.is_variadic:
+            return False
+        for arg, param in zip(args, self.parameters):
+            if not arg.can_be(param):
+                return False
+        if self.is_variadic:
+            i = min(n, arity)
+            for arg in args[i:]:
+                if not arg.can_be(self.variadic):
+                    return False
+        return True
 
 
+@frozen
+class FunctionDefinition:
+    name: str
+    overloads: Tuple[FunctionSignature]
+
+    @property
+    def result(self) -> DataType:
+        return DataType.union(sig.result for sig in self.overloads)
+    
+    def get_parameter_type_string(self) -> str:
+        result = []
+        for sig in self.overloads:
+            types = sig.parameters
+            if sig.is_variadic:
+                types = types + (f'*{sig.variadic}')
+            result.append(f'({", ".join(types)})')
+        return ' or '.join(result)
+
+    @classmethod
+    def f(cls, name: str, *args: Iterable[DataType]) -> 'FunctionDefinition':
+        if not args:
+            raise ValueError('must provide at least a return type')
+        params = tuple(args[:-1])
+        result = args[-1]
+        sig = FunctionSignature(params, result)
+        return cls(name, (sig,))
+
+    @classmethod
+    def abs(cls) -> 'FunctionDefinition':
+        return cls.f('abs', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def to_bool(cls) -> 'FunctionDefinition':
+        return cls.f('bool', DataType.PRIMITIVE, DataType.BOOL)
+
+    @classmethod
+    def to_int(cls) -> 'FunctionDefinition':
+        return cls.f('int', DataType.PRIMITIVE, DataType.NUMBER)
+
+    @classmethod
+    def to_float(cls) -> 'FunctionDefinition':
+        return cls.f('float', DataType.PRIMITIVE, DataType.NUMBER)
+
+    @classmethod
+    def to_string(cls) -> 'FunctionDefinition':
+        return cls.f('str', DataType.PRIMITIVE, DataType.STRING)
+
+    @classmethod
+    def length(cls) -> 'FunctionDefinition':
+        return cls.f('len', DataType.COMPOUND, DataType.NUMBER)
+
+    @classmethod
+    def sum(cls) -> 'FunctionDefinition':
+        return cls.f('sum', DataType.COMPOUND, DataType.NUMBER)
+
+    @classmethod
+    def product(cls) -> 'FunctionDefinition':
+        return cls.f('prod', DataType.COMPOUND, DataType.NUMBER)
+
+    @classmethod
+    def sqrt(cls) -> 'FunctionDefinition':
+        return cls.f('sqrt', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def ceil(cls) -> 'FunctionDefinition':
+        return cls.f('ceil', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def floor(cls) -> 'FunctionDefinition':
+        return cls.f('floor', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def log(cls) -> 'FunctionDefinition':
+        return cls.f('log', DataType.NUMBER, DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def sin(cls) -> 'FunctionDefinition':
+        return cls.f('sin', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def cos(cls) -> 'FunctionDefinition':
+        return cls.f('cos', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def tan(cls) -> 'FunctionDefinition':
+        return cls.f('tan', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def asin(cls) -> 'FunctionDefinition':
+        return cls.f('asin', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def acos(cls) -> 'FunctionDefinition':
+        return cls.f('acos', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def atan(cls) -> 'FunctionDefinition':
+        return cls.f('atan', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def atan2(cls) -> 'FunctionDefinition':
+        return cls.f('atan2', DataType.NUMBER, DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def degrees(cls) -> 'FunctionDefinition':
+        return cls.f('deg', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def radians(cls) -> 'FunctionDefinition':
+        return cls.f('rad', DataType.NUMBER, DataType.NUMBER)
+
+    @classmethod
+    def max(cls) -> 'FunctionDefinition':
+        num = DataType.NUMBER
+        sig1 = FunctionSignature((DataType.COMPOUND,), num)
+        sig2 = FunctionSignature((num, num,), num, variadic=DataType.NUMBER)
+        return cls('max', (sig1, sig2))
+
+    @classmethod
+    def min(cls) -> 'FunctionDefinition':
+        num = DataType.NUMBER
+        sig1 = FunctionSignature((DataType.COMPOUND,), num)
+        sig2 = FunctionSignature((num, num,), num, variadic=DataType.NUMBER)
+        return cls('min', (sig1, sig2))
+
+    @classmethod
+    def gcd(cls) -> 'FunctionDefinition':
+        num = DataType.NUMBER
+        sig1 = FunctionSignature((DataType.COMPOUND,), num)
+        sig2 = FunctionSignature((num, num,), num, variadic=DataType.NUMBER)
+        return cls('gcd', (sig1, sig2))
+
+    @classmethod
+    def roll(cls) -> 'FunctionDefinition':
+        num = DataType.NUMBER
+        sig1 = FunctionSignature((DataType.MESSAGE,), num)
+        sig2 = FunctionSignature((num, num, num, num), num)
+        return cls('roll', (sig1, sig2))
+
+    @classmethod
+    def pitch(cls) -> 'FunctionDefinition':
+        num = DataType.NUMBER
+        sig1 = FunctionSignature((DataType.MESSAGE,), num)
+        sig2 = FunctionSignature((num, num, num, num), num)
+        return cls('pitch', (sig1, sig2))
+
+    @classmethod
+    def yaw(cls) -> 'FunctionDefinition':
+        num = DataType.NUMBER
+        sig1 = FunctionSignature((DataType.MESSAGE,), num)
+        sig2 = FunctionSignature((num, num, num, num), num)
+        return cls('yaw', (sig1, sig2))
+
+
+@unique
+class BuiltinFunction(Enum):
+    '''Set of built-in functions.'''
+
+    ABS = FunctionDefinition.abs()
+    BOOL = FunctionDefinition.to_bool()
+    INT = FunctionDefinition.to_int()
+    FLOAT = FunctionDefinition.to_float()
+    STRING = FunctionDefinition.to_string()
+    LENGTH = FunctionDefinition.length()
+    SUM = FunctionDefinition.sum()
+    PRODUCT = FunctionDefinition.product()
+    SQRT = FunctionDefinition.sqrt()
+    CEIL = FunctionDefinition.ceil()
+    FLOOR = FunctionDefinition.floor()
+    LOG = FunctionDefinition.log()
+    SIN = FunctionDefinition.sin()
+    COS = FunctionDefinition.cos()
+    TAN = FunctionDefinition.tan()
+    ASIN = FunctionDefinition.asin()
+    ACOS = FunctionDefinition.acos()
+    ATAN = FunctionDefinition.atan()
+    ATAN2 = FunctionDefinition.atan2()
+    DEG = FunctionDefinition.degrees()
+    RAD = FunctionDefinition.radians()
+    MAX = FunctionDefinition.max()
+    MIN = FunctionDefinition.min()
+    GCD = FunctionDefinition.gcd()
+    ROLL = FunctionDefinition.roll()
+    PITCH = FunctionDefinition.pitch()
+    YAW = FunctionDefinition.yaw()
+
+
+def _convert_function_def(
+    fun: Union[str, BuiltinFunction, FunctionDefinition]
+) -> FunctionDefinition:
+    if isinstance(fun, FunctionDefinition):
+        return fun
+    if isinstance(fun, BuiltinFunction):
+        return fun.value
+    for member in BuiltinFunction.__members__.values():
+        if member.name == fun:
+            return member
+    raise ValueError(f'{fun!r} is not a valid function')
+
+
+@frozen
 class HplFunctionCall(HplExpression):
-    __slots__ = HplExpression.__slots__ + ("function", "arguments",)
+    function: FunctionDefinition = field(converter=_convert_function_def)
+    arguments: Tuple[HplExpression] = field(converter=tuple)
+
+    @arguments.validator
+    def _check_arguments(self, _attribute, args: Tuple[HplExpression]):
+        types = tuple(arg.data_type for arg in args)
+        for sig in self.function.overloads:
+            if not sig.accepts(types):
+                continue
+            return
+        expected = self.function.get_parameter_type_string()
+        raise HplTypeError.in_expr(self, f'arguments do not match {expected}')
+
+    def __attrs_post_init__(self):
+        object.__setattr__(self, 'data_type', self.function.result)
 
     _SIG = "function '{}' expects {}, but got {}."
 
-    # name: Input -> Output
-    _BUILTINS = {
-        "abs":   F(T_NUM, T_NUM),
-        "bool":  F(T_PRIM, T_BOOL),
-        "int":   F(T_PRIM, T_NUM),
-        "float": F(T_PRIM, T_NUM),
-        "str":   F(T_PRIM, T_STR),
-        "len":   F(T_COMP, T_NUM),
-        "sum":   F(T_COMP, T_NUM),
-        "prod":  F(T_COMP, T_NUM),
-        "sqrt":  F(T_NUM, T_NUM),
-        "ceil":  F(T_NUM, T_NUM),
-        "floor": F(T_NUM, T_NUM),
-        "log":   F(T_NUM, T_NUM, T_NUM),
-        "sin":   F(T_NUM, T_NUM),
-        "cos":   F(T_NUM, T_NUM),
-        "tan":   F(T_NUM, T_NUM),
-        "asin":  F(T_NUM, T_NUM),
-        "acos":  F(T_NUM, T_NUM),
-        "atan":  F(T_NUM, T_NUM),
-        "atan2": F(T_NUM, T_NUM, T_NUM),
-        "deg":   F(T_NUM, T_NUM),
-        "rad":   F(T_NUM, T_NUM),
-        "x":     F(T_MSG, T_NUM),
-        "y":     F(T_MSG, T_NUM),
-        "z":     F(T_MSG, T_NUM),
-        "max": FunctionType(
-            (Parameters((T_COMP,), False),
-             Parameters((T_NUM, T_NUM), True)),
-            T_NUM
-        ),
-        "min": FunctionType(
-            (Parameters((T_COMP,), False),
-             Parameters((T_NUM, T_NUM), True)),
-            T_NUM
-        ),
-        "gcd": FunctionType(
-            (Parameters((T_COMP,), False),
-             Parameters((T_NUM, T_NUM), True)),
-            T_NUM
-        ),
-        "roll": FunctionType(
-            (Parameters((T_MSG,), False),
-             Parameters((T_NUM, T_NUM, T_NUM, T_NUM), False)),
-            T_NUM
-        ),
-        "pitch": FunctionType(
-            (Parameters((T_MSG,), False),
-             Parameters((T_NUM, T_NUM, T_NUM, T_NUM), False)),
-            T_NUM
-        ),
-        "yaw": FunctionType(
-            (Parameters((T_MSG,), False),
-             Parameters((T_NUM, T_NUM, T_NUM, T_NUM), False)),
-            T_NUM
-        ),
-    }
-
     def __init__(self, fun, args):
-        try:
-            function_type = self._BUILTINS[fun]
-        except KeyError:
-            raise HplTypeError("undefined function '{}'".format(fun))
         HplExpression.__init__(self, types=function_type.output)
-        self.function = fun # string
-        self.arguments = args # [HplValue]
         self._type_check_args(function_type)
 
     @property
