@@ -7,7 +7,11 @@
 
 from enum import auto, Enum
 
-from attrs import frozen
+from attrs import evolve, field, frozen
+
+from hpl.ast.base import HplAstObject
+from hpl.ast.expressions import DataType
+from hpl.errors import HplTypeError
 
 ###############################################################################
 # Top-level Classes
@@ -55,3 +59,32 @@ class HplAstMetadata:
     @property
     def is_expression(self) -> bool:
         return self.object_type == HplAstObjectType.EXPRESSION
+
+
+###############################################################################
+# Expressions
+###############################################################################
+
+
+@frozen
+class HplExpression(HplAstObject):
+    data_type: DataType = field()
+
+    @data_type.default
+    def _get_default_data_type(self):
+        return self.default_data_type
+
+    @data_type.validator
+    def _check_own_data_type(self, _attribute, value: DataType):
+        self.default_data_type.cast(value)
+
+    @property
+    def default_data_type(self) -> DataType:
+        return DataType.ANY
+
+    def cast(self, t: DataType) -> 'HplExpression':
+        try:
+            r: DataType = self.data_type.cast(t)
+            return evolve(self, data_type=r)
+        except TypeError as e:
+            raise HplTypeError.in_expr(self, str(e))
