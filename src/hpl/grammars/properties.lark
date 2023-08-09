@@ -56,7 +56,7 @@ event: message predicate?
 
 event_disjunction: "(" (event "or")+ event ")"
 
-message: ros_name _alias?
+message: channel_name _alias?
 
 time_amount: NUMBER TIME_UNIT
 

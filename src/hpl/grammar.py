@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
-
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
 
-PREDICATE_GRAMMAR = r"""
+PREDICATE_GRAMMAR = r'''
 predicate: "{" condition "}"
 
 top_level_condition: condition
@@ -76,7 +74,7 @@ array_access: _reference "[" _index "]"
 
 _index: expr
 
-ros_name: ROS_NAME
+channel_name: CHANNEL_NAME
 
 int_literal: INT
 string: ESCAPED_STRING
@@ -87,8 +85,9 @@ boolean: TRUE | FALSE
 TRUE: "True"
 FALSE: "False"
 
-RELATIONAL_OPERATOR: EQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
-EQ_OPERATOR: "=" | "!="
+RELATIONAL_OPERATOR: EQ_OPERATOR | NEQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
+EQ_OPERATOR: "="
+NEQ_OPERATOR: "!="
 COMP_OPERATOR: "<" "="?
              | ">" "="?
 IN_OPERATOR.2: "in"
@@ -113,7 +112,7 @@ L_RANGE_INC: "["
 R_RANGE_EXC: "]!"
 R_RANGE_INC: "]"
 
-ROS_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
+CHANNEL_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
 
 VAR_REF: "@" CNAME
 
@@ -128,9 +127,9 @@ FREQ_UNIT: "hz"
 %import common.WS
 %ignore WS
 
-"""
+'''
 
-HPL_GRAMMAR = r"""
+HPL_GRAMMAR = r'''
 hpl_file: _list_of_properties
 
 _list_of_properties: [_list_of_properties] hpl_property
@@ -190,7 +189,7 @@ event: message predicate?
 
 event_disjunction: "(" (event "or")+ event ")"
 
-message: ros_name _alias?
+message: channel_name _alias?
 
 time_amount: NUMBER TIME_UNIT
 
@@ -270,7 +269,7 @@ array_access: _reference "[" _index "]"
 
 _index: expr
 
-ros_name: ROS_NAME
+channel_name: CHANNEL_NAME
 
 int_literal: INT
 string: ESCAPED_STRING
@@ -281,8 +280,9 @@ boolean: TRUE | FALSE
 TRUE: "True"
 FALSE: "False"
 
-RELATIONAL_OPERATOR: EQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
-EQ_OPERATOR: "=" | "!="
+RELATIONAL_OPERATOR: EQ_OPERATOR | NEQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
+EQ_OPERATOR: "="
+NEQ_OPERATOR: "!="
 COMP_OPERATOR: "<" "="?
              | ">" "="?
 IN_OPERATOR.2: "in"
@@ -307,7 +307,7 @@ L_RANGE_INC: "["
 R_RANGE_EXC: "]!"
 R_RANGE_INC: "]"
 
-ROS_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
+CHANNEL_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
 
 VAR_REF: "@" CNAME
 
@@ -322,4 +322,12 @@ FREQ_UNIT: "hz"
 %import common.WS
 %ignore WS
 
-"""
+'''
+
+IN_OPERATOR = 'in'
+NOT_OPERATOR = 'not'
+IF_OPERATOR = 'implies'
+OR_OPERATOR = 'or'
+AND_OPERATOR = 'and'
+ALL_OPERATOR = 'forall'
+SOME_OPERATOR = 'exists'
