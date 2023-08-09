@@ -67,7 +67,6 @@ setup(
         'Topic :: Software Development :: Libraries',
         'Topic :: Software Development :: Quality Assurance',
     ],
-    scripts=["scripts/build_grammars"],
     entry_points={
         'console_scripts': [f'{PROJECT}={PYTHON_PKG}.cli:main'],
     },
