@@ -5,9 +5,9 @@
 # Imports
 ###############################################################################
 
-from typing import Iterator, Tuple
+from typing import Any, Dict, Iterator, Tuple
 
-from attrs import frozen
+from attrs import field, frozen
 
 ###############################################################################
 # Top-level Classes
@@ -16,6 +16,8 @@ from attrs import frozen
 
 @frozen
 class HplAstObject:
+    metadata: Dict[str, Any] = field(factory=dict, init=False, eq=False)
+
     @property
     def is_specification(self) -> bool:
         return False
