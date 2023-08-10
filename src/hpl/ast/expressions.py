@@ -432,6 +432,14 @@ class HplLiteral(HplAtomicValue):
     token: str
     value: Union[bool, int, float, str] = field(validator=instance_of((bool, int, float, str)))
 
+    @classmethod
+    def true(cls) -> 'HplLiteral':
+        return cls(token='True', value=True)
+
+    @classmethod
+    def false(cls) -> 'HplLiteral':
+        return cls(token='False', value=False)
+
     @property
     def default_data_type(self) -> DataType:
         if self.value is True or self.value is False:
@@ -446,6 +454,10 @@ class HplLiteral(HplAtomicValue):
 
     def __str__(self) -> str:
         return self.token
+
+
+TRUE: Final[HplLiteral] = HplLiteral.true()
+FALSE: Final[HplLiteral] = HplLiteral.false()
 
 
 @frozen
