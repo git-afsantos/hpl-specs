@@ -5,13 +5,14 @@
 # Imports
 ###############################################################################
 
-from typing import Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 from attrs import evolve, field, frozen
 from attrs.validators import instance_of
 
 from hpl.ast.base import HplAstObject
-from hpl.ast.expressions import And, BuiltinUnaryOperator, HplExpression, HplVarReference, Not
+from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplExpression, HplVarReference, Not
+from hpl.errors import HplSanityError
 
 ###############################################################################
 # Top-level Predicate
@@ -54,10 +55,13 @@ class HplPredicate(HplAstObject):
     def contains_self_reference(self) -> bool:
         return self.condition.contains_self_reference()
 
-    def replace_self_reference(self, _alias: str) -> 'HplPredicate':
+    def replace_var_reference(self, _alias: str, _expr: HplExpression) -> 'HplPredicate':
         raise NotImplementedError()
 
-    def refine_types(self, type_token, aliases=None) -> 'HplPredicate':
+    def replace_self_reference(self, _expr: HplExpression) -> 'HplPredicate':
+        raise NotImplementedError()
+
+    def refine_types(self, _type_token, _aliases=None) -> 'HplPredicate':
         raise NotImplementedError()
 
 
@@ -83,12 +87,36 @@ class HplPredicateExpression(HplPredicate):
                     refs = []
                     ref_table[key] = refs
                 refs.append(obj)
-        self._all_refs_same_type(expr, ref_table)
-        self._some_field_refs(expr, ref_table)
+        self._all_refs_same_type(ref_table)
+        self._some_field_refs(ref_table)
 
-    _DIFF_TYPES = ("multiple occurrences of '{}' with incompatible types: "
-                   "found ({}) and ({})")
-    _NO_REFS = "there are no references to any fields of this message"
+    def _all_refs_same_type(self, table: Dict[str, List[HplExpression]]):
+        # All references to the same field/variable have the same type.
+        for ref_group in table.values():
+            # must traverse twice, in case we start with the most generic
+            # and go down to the most specific
+            final_type = DataType.ANY
+            for ref in ref_group:
+                final_type = ref.data_type.cast(final_type)
+            for ref in reversed(ref_group):
+                final_type = ref.data_type.cast(final_type)
+
+    def _some_field_refs(self, table: Dict[str, List[HplExpression]]):
+        # There is at least one reference to a field (own).
+        #   [NYI] Stricter: one reference per atomic condition.
+        for ref_group in table.values():
+            for ref in ref_group:
+                if not ref.is_accessor:
+                    break
+                if ref.is_indexed:
+                    break
+                if not ref.message.is_value:
+                    break
+                assert ref.message.is_reference
+                if not ref.message.is_this_msg:
+                    break
+                return  # OK
+        raise HplSanityError.predicate_without_self_refs(self)
 
     def children(self) -> Tuple[HplExpression]:
         return (self.expression,)
@@ -105,6 +133,14 @@ class HplPredicateExpression(HplPredicate):
         expr = And(self.expression, other.condition)
         return HplPredicateExpression(expr)
 
+    def replace_var_reference(self, alias: str, expr: HplExpression) -> HplPredicate:
+        phi: HplExpression = self.expression.replace_var_reference(alias, expr)
+        return evolve(self, expression=phi)
+
+    def replace_self_reference(self, expr: HplExpression) -> HplPredicate:
+        phi: HplExpression = self.expression.replace_self_reference(expr)
+        return evolve(self, expression=expr)
+
     def refine_types(self, rostype, aliases=None):
         # rostype: ROS Type Token
         # aliases: string (alias) -> ROS Type Token
@@ -116,19 +152,6 @@ class HplPredicateExpression(HplPredicate):
                 self._refine_type(obj, rostype, aliases)
             else:
                 stack.extend(reversed(obj.children()))
-
-    def replace_self_reference(self, alias: str) -> HplPredicate:
-        ref = HplVarReference(f'@{alias}')
-        expr = self.expression.replace_self_reference(ref)
-        return evolve(self, expression=expr)
-        for obj in self.iterate():
-            if obj.is_expression and obj.is_accessor:
-                if obj.is_field and obj.message.is_value:
-                    if obj.message.is_variable:
-                        if obj.message.name == alias:
-                            msg = HplThisMessage()
-                            obj.message = msg
-                            obj._type_check(msg, T_MSG)
 
     def _refine_type(self, accessor, rostype, aliases):
         stack = [accessor]
@@ -181,38 +204,8 @@ class HplPredicateExpression(HplPredicate):
                 accessor._type_check(expr, T_STR)
             expr.ros_type = t
 
-    def _all_refs_same_type(self, table):
-        # All references to the same field/variable have the same type.
-        for key, refs in table.items():
-            # must traverse twice, in case we start with the most generic
-            # and go down to the most specific
-            final_type = T_ANY
-            for ref in refs:
-                ref.cast(final_type)
-                final_type = ref.types
-            for ref in reversed(refs):
-                ref.cast(final_type)
-                final_type = ref.types
-
-    def _some_field_refs(self, table):
-        # There is, at least, one reference to a field (own).
-        #   [NYI] Stricter: one reference per atomic condition.
-        for refs in table.values():
-            for ref in refs:
-                if not ref.is_accessor:
-                    break
-                if ref.is_indexed:
-                    break
-                if not ref.message.is_value:
-                    break
-                assert ref.message.is_reference
-                if not ref.message.is_this_msg:
-                    break
-                return # OK
-        raise HplSanityError(self._NO_REFS)
-
-    def __str__(self):
-        return "{{ {} }}".format(self.condition)
+    def __str__(self) -> str:
+        return f'{{ {self.expression} }}'
 
 
 ###############################################################################
@@ -233,20 +226,26 @@ class HplVacuousTruth(HplPredicate):
     def is_fully_typed(self) -> bool:
         return True
 
-    def negate(self) -> HplAstObject:
+    def negate(self) -> HplPredicate:
         return HplContradiction()
 
-    def join(self, other: HplAstObject):
+    def join(self, other: HplPredicate):
         return other
 
-    def external_references(self):
+    def external_references(self) -> Set[str]:
         return set()
 
-    def contains_reference(self, alias):
+    def contains_reference(self, _alias: str) -> bool:
         return False
 
-    def replace_self_reference(self, alias):
-        pass
+    def contains_self_reference(self) -> bool:
+        return False
+
+    def replace_var_reference(self, _alias: str, _expr: HplExpression) -> HplPredicate:
+        return self
+
+    def replace_self_reference(self, _expr: HplExpression) -> HplPredicate:
+        return self
 
     def refine_types(self, rostype, aliases=None):
         pass
@@ -265,23 +264,29 @@ class HplContradiction(HplPredicate):
     def is_true(self) -> bool:
         return False
 
-    def is_fully_typed(self):
+    def is_fully_typed(self) -> bool:
         return True
 
-    def negate(self):
+    def negate(self) -> HplPredicate:
         return HplVacuousTruth()
 
-    def join(self, other):
+    def join(self, other: HplPredicate) -> HplPredicate:
         return self
 
-    def external_references(self):
+    def external_references(self) -> Set[str]:
         return set()
 
-    def contains_reference(self, alias):
+    def contains_reference(self, _alias: str) -> bool:
         return False
 
-    def replace_self_reference(self, alias):
-        pass
+    def contains_self_reference(self) -> bool:
+        return False
+
+    def replace_var_reference(self, _alias: str, _expr: HplExpression) -> HplPredicate:
+        return self
+
+    def replace_self_reference(self, _expr: HplExpression) -> HplPredicate:
+        return self
 
     def refine_types(self, rostype, aliases=None):
         pass
