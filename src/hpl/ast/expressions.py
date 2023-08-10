@@ -335,14 +335,13 @@ class HplSet(HplValue):
     ) -> HplExpression:
         if test(self):
             return other
-        diff = []
-        for previous in self.values:
-            new: HplExpression = previous.replace(test, other)
-            if new is not previous:
-                diff.append(new)
-        if not diff:
+        values = tuple(expr.replace(test, other) for expr in self.values)
+        for previous, value in zip(self.values, values):
+            if value is not previous:
+                break
+        else:
             return self
-        return evolve(self, values=tuple(diff))
+        return evolve(self, values=values)
 
     def __str__(self) -> str:
         return f'{{{", ".join(str(v) for v in self.values)}}}'
@@ -382,10 +381,8 @@ class HplRange(HplValue):
         if test(self):
             return other
         min_value: HplExpression = self.min_value.replace(test, other)
-        diff: bool = min_value is not self.min_value
         max_value: HplExpression = self.max_value.replace(test, other)
-        diff = diff or max_value is not self.max_value
-        if not diff:
+        if min_value is self.min_value and max_value is self.max_value:
             return self
         return evolve(self, min_value=min_value, max_value=max_value)
 
@@ -774,9 +771,29 @@ class HplUnaryOperator(HplExpression):
     def children(self) -> Tuple[HplExpression]:
         return (self.operand,)
 
-    def replace_self_reference(self, alias: str) -> 'HplUnaryOperator':
-        arg = self.operand.replace_self_reference(alias)
-        return evolve(self, operand=arg)
+    def external_references(self) -> Set[str]:
+        return self.operand.external_references()
+
+    def contains_reference(self, alias: str) -> bool:
+        return self.operand.contains_reference(alias)
+
+    def contains_self_reference(self) -> bool:
+        return self.operand.contains_self_reference()
+
+    def contains_definition(self, alias: str) -> bool:
+        return self.operand.contains_definition(alias)
+
+    def replace(
+        self,
+        test: Callable[[HplExpression], bool],
+        other: HplExpression,
+    ) -> HplExpression:
+        if test(self):
+            return other
+        operand: HplExpression = self.operand.replace(test, other)
+        if operand is self.operand:
+            return self
+        return evolve(self, operand=operand)
 
     def __str__(self) -> str:
         op: str = self.operator.token
@@ -1009,9 +1026,17 @@ class HplBinaryOperator(HplExpression):
     def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.operand1, self.operand2)
 
-    def replace_self_reference(self, alias: str) -> 'HplBinaryOperator':
-        a = self.operand1.replace_self_reference(alias)
-        b = self.operand2.replace_self_reference(alias)
+    def replace(
+        self,
+        test: Callable[[HplExpression], bool],
+        other: HplExpression,
+    ) -> HplExpression:
+        if test(self):
+            return other
+        a: HplExpression = self.operand1.replace(test, other)
+        b: HplExpression = self.operand2.replace(test, other)
+        if a is self.operand1 and b is self.operand2:
+            return self
         return evolve(self, operand1=a, operand2=b)
 
     def __str__(self) -> str:
@@ -1296,6 +1321,21 @@ class HplFunctionCall(HplExpression):
     def children(self) -> Tuple[HplExpression]:
         return self.arguments
 
+    def replace(
+        self,
+        test: Callable[[HplExpression], bool],
+        other: HplExpression,
+    ) -> HplExpression:
+        if test(self):
+            return other
+        args = tuple(expr.replace(test, other) for expr in self.arguments)
+        for previous, arg in zip(self.arguments, args):
+            if arg is not previous:
+                break
+        else:
+            return self
+        return evolve(self, arguments=args)
+
     def __str__(self) -> str:
         args = tuple(arg.data_type for arg in self.arguments)
         return f'{self.function.name}{args}'
@@ -1348,6 +1388,30 @@ class HplFieldAccess(HplDataAccess):
     def children(self) -> Tuple[HplExpression]:
         return (self.message,)
 
+    def external_references(self) -> Set[str]:
+        return self.message.external_references()
+
+    def contains_reference(self, alias: str) -> bool:
+        return self.message.contains_reference(alias)
+
+    def contains_self_reference(self) -> bool:
+        return self.message.contains_self_reference()
+
+    def contains_definition(self, alias: str) -> bool:
+        return self.message.contains_definition(alias)
+
+    def replace(
+        self,
+        test: Callable[[HplExpression], bool],
+        other: HplExpression,
+    ) -> HplExpression:
+        if test(self):
+            return other
+        message: HplExpression = self.message.replace(test, other)
+        if message is self.message:
+            return self
+        return evolve(self, message=message)
+
     def __str__(self) -> str:
         msg = str(self.message)
         return self.field if not msg else f'{msg}.{self.field}'
@@ -1364,6 +1428,19 @@ class HplArrayAccess(HplDataAccess):
 
     def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.array, self.index)
+
+    def replace(
+        self,
+        test: Callable[[HplExpression], bool],
+        other: HplExpression,
+    ) -> HplExpression:
+        if test(self):
+            return other
+        array: HplExpression = self.array.replace(test, other)
+        index: HplExpression = self.index.replace(test, other)
+        if array is self.array and index is self.index:
+            return self
+        return evolve(self, array=array, index=index)
 
     def __str__(self) -> str:
         return f'{self.array}[{self.index}]'
