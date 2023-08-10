@@ -232,6 +232,8 @@ class HplExpression(HplAstObject):
 
 def _type_checker(t: DataType) -> Callable[[HplExpression, Any, HplExpression], None]:
     def validator(self: HplExpression, _attribute: Any, expr: HplExpression):
+        if not isinstance(expr, HplExpression):
+            raise TypeError(f'expected expression, got {expr!r}')
         self._type_check(expr, t)
     return validator
 
@@ -921,17 +923,17 @@ class FunctionSignature:
     def accepts(self, args: Iterable[DataType]) -> bool:
         if not isinstance(args, (tuple, list)):
             args = tuple(args)
-        n = len(args)
-        arity = self.arity
-        if arity > n:
+        nargs = len(args)
+        nparams = self.arity
+        if nparams > nargs:
             return False
-        if arity < n and not self.is_variadic:
+        if nparams < nargs and not self.is_variadic:
             return False
         for arg, param in zip(args, self.parameters):
             if not arg.can_be(param):
                 return False
         if self.is_variadic:
-            i = min(n, arity)
+            i = min(nargs, nparams)
             for arg in args[i:]:
                 if not arg.can_be(self.variadic):
                     return False
@@ -1147,220 +1149,94 @@ class HplFunctionCall(HplExpression):
     def _check_arguments(self, _attribute, args: Tuple[HplExpression]):
         types = tuple(arg.data_type for arg in args)
         for sig in self.function.overloads:
-            if not sig.accepts(types):
-                continue
-            return
+            if sig.accepts(types):
+                return
         expected = self.function.get_parameter_type_string()
-        raise HplTypeError.in_expr(self, f'arguments do not match {expected}')
+        # error = f'arguments do not match {expected}'
+        error = f"function '{self.function.name}' expects {expected}, but got {types}."
+        raise HplTypeError.in_expr(self, error)
 
     def __attrs_post_init__(self):
         object.__setattr__(self, 'data_type', self.function.result)
 
-    _SIG = "function '{}' expects {}, but got {}."
-
-    def __init__(self, fun, args):
-        HplExpression.__init__(self, types=function_type.output)
-        self._type_check_args(function_type)
-
     @property
-    def is_function_call(self):
+    def is_function_call(self) -> bool:
         return True
 
     @property
-    def arity(self):
+    def arity(self) -> int:
         return len(self.arguments)
 
-    def children(self):
+    def children(self) -> Tuple[HplExpression]:
         return self.arguments
 
-    def clone(self):
-        expr = HplFunctionCall(self.function,
-                               tuple(a.clone() for a in self.arguments))
-        expr.types = self.types
-        return expr
-
-    def _type_check_args(self, function_type):
-        args = self.arguments
-        nargs = len(args)
-        for params in function_type.params:
-            if params.var_args:
-                if self._match_with_var_args(params):
-                    return True
-            else:
-                if self._match_normal(params):
-                    return True
-        raise HplTypeError(self._error_msg(function_type.params))
-
-    def _match_with_var_args(self, params):
-        args = self.arguments
-        nargs = len(args)
-        nparams = len(params.types)
-        if nargs < nparams:
-            return False
-        for i in range(nparams):
-            t = params.types[i]
-            if not args[i].can_be(t):
-                return False
-        # repeat the last type indefinitely
-        for i in range(nparams, nargs):
-            t = params.types[-1]
-            if not args[i].can_be(t):
-                return False
-        # by this point, everything matches; commit the changes
-        for i in range(nparams):
-            t = params.types[i]
-            self._type_check(args[i], t)
-        for i in range(nparams, nargs):
-            t = params.types[-1]
-            self._type_check(args[i], t)
-        return True
-
-    def _match_normal(self, params):
-        args = self.arguments
-        nargs = len(args)
-        nparams = len(params.types)
-        if nargs != nparams:
-            return False
-        for i in range(nparams):
-            t = params.types[i]
-            if not args[i].can_be(t):
-                return False
-        # by this point, everything matches; commit the changes
-        for i in range(nparams):
-            t = params.types[i]
-            self._type_check(args[i], t)
-        return True
-
-    def _error_msg(self, overloads):
-        # function '{}' expects {}, but got {}.
-        sigs = []
-        for params in overloads:
-            sigs.append("({}{})".format(
-                ", ".join(type_name(t) for t in params.types),
-                "*" if params.var_args else ""
-            ))
-        sigs = " or ".join(sigs)
-        args = "({})".format(", ".join(type_name(arg.types)
-                             for arg in self.arguments))
-        return self._SIG.format(self.function, sigs, args)
-
-    def __eq__(self, other):
-        if not isinstance(other, HplFunctionCall):
-            return False
-        return (self.function == other.function
-                and self.arguments == other.arguments)
-
-    def __hash__(self):
-        return 31 * hash(self.function) + hash(self.arguments)
-
-    def __str__(self):
-        return "{}({})".format(self.function,
-            ", ".join(str(arg) for arg in self.arguments))
-
-    def __repr__(self):
-        return "{}({}, {})".format(
-            type(self).__name__, repr(self.function), repr(self.arguments))
+    def __str__(self) -> str:
+        args = tuple(arg.data_type for arg in self.arguments)
+        return f'{self.function.name}{args}'
 
 
 ###############################################################################
 # Message Field Access
 ###############################################################################
 
-class HplFieldAccess(HplExpression):
-    __slots__ = HplExpression.__slots__ + ("message", "field", "ros_type")
 
-    def __init__(self, msg, field):
-        HplExpression.__init__(self, types=T_ROS)
-        self.message = msg # HplExpression
-        self.field = field # string
-        self.ros_type = None
-        self._type_check(msg, T_MSG)
+@frozen
+class HplDataAccess(HplExpression):
+    @property
+    def default_data_type(self) -> DataType:
+        return DataType.ITEM | DataType.ARRAY
 
     @property
-    def is_accessor(self):
+    def is_accessor(self) -> bool:
         return True
 
     @property
-    def is_field(self):
-        return True
-
-    @property
-    def is_indexed(self):
+    def is_field(self) -> bool:
         return False
 
-    def base_message(self):
+    @property
+    def is_indexed(self) -> bool:
+        return False
+
+    @property
+    def object(self) -> HplExpression:
+        raise NotImplementedError()
+
+    def base_object(self) -> HplExpression:
         obj = self
         while obj.is_accessor:
-            obj = obj.message
+            obj = obj.object
         assert obj.is_value
         return obj
 
-    def children(self):
+
+@frozen
+class HplFieldAccess(HplDataAccess):
+    message: HplExpression = field(validator=_type_checker(DataType.MESSAGE))
+    field: str = field(validator=instance_of(str))
+
+    @property
+    def is_field(self) -> bool:
+        return True
+
+    def children(self) -> Tuple[HplExpression]:
         return (self.message,)
 
-    def __str__(self):
-        return str(self.field) if not self.message else f'{self.message}.{self.field}'
+    def __str__(self) -> str:
+        return f'{self.message}.{self.field}'
 
 
-class HplArrayAccess(HplExpression):
-    __slots__ = HplExpression.__slots__ + ("array", "item", "ros_type")
-
-    _MULTI_ARRAY = "multi-dimensional array access: '{}[{}]'"
-
-    def __init__(self, array, index):
-        if array.is_accessor and array.is_indexed:
-            raise HplTypeError(self._MULTI_ARRAY.format(array, index))
-        HplExpression.__init__(self, types=T_ITEM)
-        self.array = array # HplExpression
-        self.index = index # HplExpression
-        self.ros_type = None
-        self._type_check(array, T_ARR)
-        self._type_check(index, T_NUM)
+@frozen
+class HplArrayAccess(HplDataAccess):
+    array: HplExpression = field(validator=_type_checker(DataType.ARRAY))
+    index: HplExpression = field(validator=_type_checker(DataType.NUMBER))
 
     @property
-    def is_accessor(self):
+    def is_indexed(self) -> bool:
         return True
 
-    @property
-    def is_field(self):
-        return False
-
-    @property
-    def is_indexed(self):
-        return True
-
-    @property
-    def message(self):
-        return self.array
-
-    def base_message(self):
-        obj = self
-        while obj.is_accessor:
-            obj = obj.message
-        assert obj.is_value
-        return obj
-
-    def children(self):
+    def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.array, self.index)
 
-    def clone(self):
-        expr = HplArrayAccess(self.array.clone(), self.index.clone())
-        expr.ros_type = self.ros_type
-        expr.types = self.types
-        return expr
-
-    def __eq__(self, other):
-        if not isinstance(other, HplArrayAccess):
-            return False
-        return (self.array == other.array
-                and self.index == other.index)
-
-    def __hash__(self):
-        return 31 * hash(self.array) + hash(self.index)
-
-    def __str__(self):
-        return "{}[{}]".format(self.array, self.index)
-
-    def __repr__(self):
-        return "{}({}, {})".format(
-            type(self).__name__, repr(self.array), repr(self.index))
+    def __str__(self) -> str:
+        return f'{self.array}[{self.index}]'
