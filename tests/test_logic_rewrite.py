@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from hpl.logic import (
+from hpl.rewrite import (
     is_true, replace_this_with_var, replace_var_with_this, refactor_reference
 )
 from hpl.parser import predicate_parser
