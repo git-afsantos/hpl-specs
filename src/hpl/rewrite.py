@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
 
@@ -7,28 +5,39 @@
 # Imports
 ###############################################################################
 
-from __future__ import unicode_literals
+from typing import Callable
 
-from .ast import (
-    And, Forall, Or, Not, T_MSG,
-    HplBinaryOperator, HplContradiction, HplFunctionCall, HplLiteral,
-    HplPredicate, HplThisMessage, HplVacuousTruth, HplVarReference
-)
+from attrs import evolve, fields
 
-###############################################################################
-# Constants
-###############################################################################
-
-OP_NOT = "not"
-OP_AND = "and"
-OP_OR = "or"
-OP_IMPLIES = "implies"
-OP_IFF = "iff"
-
+from hpl.ast.expressions import HplExpression
 
 ###############################################################################
 # Formula Rewriting
 ###############################################################################
+
+
+def replace(
+    expr: HplExpression,
+    test: Callable[['HplExpression'], bool],
+    other: HplExpression,
+) -> HplExpression:
+    if test(expr):
+        return other
+    diff = {}
+    for attribute in fields(type(expr)):
+        cls = attribute.type
+        name: str = attribute.name
+        is_valid_type = isinstance(cls, type) and issubclass(cls, HplExpression)
+        is_valid_type = is_valid_type or cls in ('HplExpression', 'HplValue')
+        if is_valid_type:
+            current: HplExpression = getattr(expr, name)
+            new: HplExpression = replace(current, test, other)
+            if new is not current:
+                diff[name] = new
+    if not diff:
+        return expr
+    return evolve(expr, **diff)
+
 
 def replace_this_with_var(predicate_or_expression, alias):
     if (not predicate_or_expression.is_predicate
