@@ -14,7 +14,16 @@ from attrs.validators import deep_iterable, instance_of
 
 from hpl.ast.base import HplAstObject
 from hpl.errors import HplSanityError, HplTypeError
-from hpl.grammar import ALL_OPERATOR, AND_OPERATOR, IFF_OPERATOR, IMPLIES_OPERATOR, IN_OPERATOR, NOT_OPERATOR, OR_OPERATOR, SOME_OPERATOR
+from hpl.grammar import (
+    ALL_OPERATOR,
+    AND_OPERATOR,
+    IFF_OPERATOR,
+    IMPLIES_OPERATOR,
+    IN_OPERATOR,
+    NOT_OPERATOR,
+    OR_OPERATOR,
+    SOME_OPERATOR,
+)
 
 ###############################################################################
 # Type System
