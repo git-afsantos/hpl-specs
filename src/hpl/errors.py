@@ -22,7 +22,9 @@ def invalid_type(expected: str, found: str, obj: Any) -> None:
 
 
 class HplSanityError(Exception):
-    pass
+    @classmethod
+    def predicate_without_self_refs(cls, obj) -> 'HplSanityError':
+        return cls(f'there are no references to message fields in «{obj}»')
 
 
 class HplTypeError(Exception):
