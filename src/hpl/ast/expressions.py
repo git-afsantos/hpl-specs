@@ -9,7 +9,7 @@ from typing import Any, Callable, Final, Iterable, Optional, Set, Tuple, Type, U
 
 from enum import Enum, auto, Flag, unique
 
-from attrs import evolve, field, frozen
+from attrs import evolve, field, fields, frozen
 from attrs.validators import deep_iterable, instance_of
 
 from hpl.ast.base import HplAstObject
@@ -116,7 +116,7 @@ class DataType(Flag):
 
 @frozen
 class HplExpression(HplAstObject):
-    data_type: DataType = field()
+    data_type: DataType = field(kw_only=True)
 
     @data_type.default
     def _get_default_data_type(self):
@@ -206,37 +206,48 @@ class HplExpression(HplAstObject):
             raise HplTypeError.in_expr(self, str(e))
 
     def external_references(self) -> Set[str]:
-        refs: Set[str] = set()
-        for obj in self.iterate():
-            assert obj.is_expression
-            if obj.is_accessor:
-                if obj.is_field and obj.message.is_value:
-                    if obj.message.is_variable:
-                        refs.add(obj.message.name)
-        return refs
+        return set().union(expr.external_references() for expr in self.children())
 
     def contains_reference(self, alias: str) -> bool:
-        for obj in self.iterate():
-            assert obj.is_expression
-            if obj.is_value and obj.is_variable:
-                if obj.name == alias:
-                    return True
-        return False
+        return any(expr.contains_reference(alias) for expr in self.children())
 
     def contains_self_reference(self) -> bool:
-        for obj in self.iterate():
-            assert obj.is_expression
-            if obj.is_value and obj.is_this_msg:
-                return True
-        return False
+        return any(expr.contains_self_reference() for expr in self.children())
 
     def contains_definition(self, alias: str) -> bool:
-        for obj in self.iterate():
-            assert obj.is_expression
-            if obj.is_quantifier:
-                if obj.variable == alias:
-                    return True
-        return False
+        return any(expr.contains_definition(alias) for expr in self.children())
+
+    def replace_self_reference(self, other: 'HplExpression') -> 'HplExpression':
+        return self.replace(is_self_reference, other)
+
+    def replace_var_reference(self, alias: str, other: 'HplExpression') -> 'HplExpression':
+        test = lambda expr: is_var_reference(expr) and expr.name == alias
+        return self.replace(test, other)
+
+    def replace(
+        self,
+        test: Callable[['HplExpression'], bool],
+        other: 'HplExpression',
+    ) -> 'HplExpression':
+        if test(self):
+            return other
+        diff = {}
+        for attribute in fields(type(self)):
+            cls = attribute.type
+            name: str = attribute.name
+            if isinstance(cls, str) and cls == 'HplExpression':
+                expr: HplExpression = getattr(self, name)
+                new: HplExpression = expr.replace(test, other)
+                if new is not expr:
+                    diff[name] = new
+            elif isinstance(cls, type) and issubclass(cls, HplExpression):
+                expr: HplExpression = getattr(self, name)
+                new: HplExpression = expr.replace(test, other)
+                if new is not expr:
+                    diff[name] = new
+        if not diff:
+            return self
+        return evolve(self, **diff)
 
 
 def _type_checker(t: DataType) -> Callable[[HplExpression, Any, HplExpression], None]:
@@ -317,6 +328,22 @@ class HplSet(HplValue):
     def children(self) -> Tuple[HplValue]:
         return self.values
 
+    def replace(
+        self,
+        test: Callable[[HplExpression], bool],
+        other: HplExpression,
+    ) -> HplExpression:
+        if test(self):
+            return other
+        diff = []
+        for previous in self.values:
+            new: HplExpression = previous.replace(test, other)
+            if new is not previous:
+                diff.append(new)
+        if not diff:
+            return self
+        return evolve(self, values=tuple(diff))
+
     def __str__(self) -> str:
         return f'{{{", ".join(str(v) for v in self.values)}}}'
 
@@ -347,6 +374,21 @@ class HplRange(HplValue):
     def children(self) -> Tuple[HplValue]:
         return (self.min_value, self.max_value)
 
+    def replace(
+        self,
+        test: Callable[[HplExpression], bool],
+        other: HplExpression,
+    ) -> HplExpression:
+        if test(self):
+            return other
+        min_value: HplExpression = self.min_value.replace(test, other)
+        diff: bool = min_value is not self.min_value
+        max_value: HplExpression = self.max_value.replace(test, other)
+        diff = diff or max_value is not self.max_value
+        if not diff:
+            return self
+        return evolve(self, min_value=min_value, max_value=max_value)
+
     def __str__(self) -> str:
         lp = '![' if self.exclude_min else '['
         rp = ']!' if self.exclude_max else ']'
@@ -361,7 +403,35 @@ class HplRange(HplValue):
 
 
 @frozen
-class HplLiteral(HplValue):
+class HplAtomicValue(HplValue):
+    def external_references(self) -> Set[str]:
+        return set()
+
+    def contains_reference(self, _alias: str) -> bool:
+        return False
+
+    def contains_self_reference(self) -> bool:
+        return False
+
+    def contains_definition(self, _alias: str) -> bool:
+        return False
+
+    def replace_self_reference(self, _other: HplExpression) -> HplExpression:
+        return self
+
+    def replace_var_reference(self, _alias: str, _other: HplExpression) -> HplExpression:
+        return self
+
+    def replace(
+        self,
+        test: Callable[[HplExpression], bool],
+        other: HplExpression,
+    ) -> HplExpression:
+        return other if test(self) else self
+
+
+@frozen
+class HplLiteral(HplAtomicValue):
     token: str
     value: Union[bool, int, float, str] = field(validator=instance_of((bool, int, float, str)))
 
@@ -382,9 +452,7 @@ class HplLiteral(HplValue):
 
 
 @frozen
-class HplThisMessage(HplValue):
-    message_type: Any = None
-
+class HplThisMessage(HplAtomicValue):
     @property
     def default_data_type(self) -> DataType:
         return DataType.MESSAGE
@@ -397,14 +465,19 @@ class HplThisMessage(HplValue):
     def is_this_msg(self) -> bool:
         return True
 
+    def contains_self_reference(self) -> bool:
+        return True
+
+    def replace_self_reference(self, other: HplExpression) -> HplExpression:
+        return other
+
     def __str__(self) -> str:
         return ''
 
 
 @frozen
-class HplVarReference(HplValue):
+class HplVarReference(HplAtomicValue):
     token: str
-    message_type: Any = None
 
     @property
     def default_data_type(self) -> DataType:
@@ -421,6 +494,15 @@ class HplVarReference(HplValue):
     @property
     def name(self) -> str:
         return self.token[1:]  # remove lead "@"
+
+    def external_references(self) -> Set[str]:
+        return {self.name}
+
+    def contains_reference(self, alias: str) -> bool:
+        return alias == self.name
+
+    def replace_var_reference(self, alias: str, other: HplExpression) -> HplExpression:
+        return other if alias == self.name else self
 
     def __str__(self) -> str:
         return self.token
@@ -556,6 +638,32 @@ class HplQuantifier(HplExpression):
     def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.domain, self.condition)
 
+    def external_references(self) -> Set[str]:
+        refs = self.domain.external_references()
+        refs |= self.condition.external_references()
+        refs.remove(self.variable)
+        return refs
+
+    def contains_definition(self, alias: str) -> bool:
+        if alias == self.variable:
+            return True
+        return any(expr.contains_definition(alias) for expr in self.children())
+
+    def replace(
+        self,
+        test: Callable[[HplExpression], bool],
+        other: HplExpression,
+    ) -> HplExpression:
+        if test(self):
+            return other
+        domain: HplExpression = self.domain.replace(test, other)
+        diff: bool = domain is not self.domain
+        condition: HplExpression = self.condition.replace(test, other)
+        diff = diff or condition is not self.condition
+        if not diff:
+            return self
+        return evolve(self, domain=domain, condition=condition)
+
     def __str__(self) -> str:
         return f'({self.op} {self.x} in {self.d}: {self.p})'
 
@@ -665,6 +773,10 @@ class HplUnaryOperator(HplExpression):
 
     def children(self) -> Tuple[HplExpression]:
         return (self.operand,)
+
+    def replace_self_reference(self, alias: str) -> 'HplUnaryOperator':
+        arg = self.operand.replace_self_reference(alias)
+        return evolve(self, operand=arg)
 
     def __str__(self) -> str:
         op: str = self.operator.token
@@ -896,6 +1008,11 @@ class HplBinaryOperator(HplExpression):
 
     def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.operand1, self.operand2)
+
+    def replace_self_reference(self, alias: str) -> 'HplBinaryOperator':
+        a = self.operand1.replace_self_reference(alias)
+        b = self.operand2.replace_self_reference(alias)
+        return evolve(self, operand1=a, operand2=b)
 
     def __str__(self) -> str:
         if self.is_infix:
@@ -1232,7 +1349,8 @@ class HplFieldAccess(HplDataAccess):
         return (self.message,)
 
     def __str__(self) -> str:
-        return f'{self.message}.{self.field}'
+        msg = str(self.message)
+        return self.field if not msg else f'{msg}.{self.field}'
 
 
 @frozen
@@ -1249,3 +1367,16 @@ class HplArrayAccess(HplDataAccess):
 
     def __str__(self) -> str:
         return f'{self.array}[{self.index}]'
+
+
+###############################################################################
+# Helper Functions
+###############################################################################
+
+
+def is_self_reference(expr: HplExpression) -> bool:
+    return expr.is_value and expr.is_this_msg
+
+
+def is_var_reference(expr: HplExpression) -> bool:
+    return expr.is_value and expr.is_variable
