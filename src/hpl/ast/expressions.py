@@ -148,8 +148,15 @@ class HplExpression(HplAstObject):
     ) -> 'HplExpression':
         if test(self):
             return other
-        f = lambda x: x.replace(test, other)
-        return self.reshape(f)
+        f = lambda x: x._replace(test, other)
+        return self.reshape(f, deep=True)
+
+    def _replace(
+        self,
+        test: Callable[['HplExpression'], bool],
+        other: 'HplExpression',
+    ) -> 'HplExpression':
+        return other if test(self) else self
 
     def refine(
         self,
@@ -158,10 +165,18 @@ class HplExpression(HplAstObject):
     ) -> 'HplExpression':
         if external is None:
             external = {}
-        f = lambda x: x.refine(type_token, external=external)
-        return self.reshape(f)
+        f = lambda x: x._refine(type_token, external)
+        return self.reshape(f, deep=True)
 
-    def reshape(self, f: Callable[['HplExpression'], 'HplExpression']) -> 'HplExpression':
+    def _refine(self, token: TypeToken, ext: Mapping[str, TypeToken]) -> 'HplExpression':
+        return self
+
+    def reshape(
+        self,
+        f: Callable[['HplExpression'], 'HplExpression'],
+        *,
+        deep: bool = False
+    ) -> 'HplExpression':
         diff = {}
         for attribute in fields(type(self)):
             cls = attribute.type
@@ -170,7 +185,7 @@ class HplExpression(HplAstObject):
             is_expr = is_expr or (isinstance(cls, str) and cls == 'HplExpression')
             if is_expr:
                 expr: HplExpression = getattr(self, name)
-                new: HplExpression = f(expr)
+                new: HplExpression = f(expr) if not deep else f(expr.reshape(f))
                 if new is not expr:
                     diff[name] = new
         if not diff:
