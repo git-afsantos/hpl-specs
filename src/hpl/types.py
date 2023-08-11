@@ -17,7 +17,6 @@ from attrs.validators import ge, in_, instance_of
 ###############################################################################
 
 INF: Final[float] = float('inf')
-PY_NUMBER: Final[Tuple[Type[int], Type[float], Type[complex]]] = (int, float, complex)
 
 ###############################################################################
 # Type System
@@ -163,19 +162,6 @@ class TypeToken:
     def is_set(self) -> bool:
         return self.type.can_be_set
 
-    def get_fields(self) -> Mapping[str, 'TypeToken']:
-        return {}
-
-    def leaf_fields(self) -> Mapping[str, 'TypeToken']:
-        fields = {}
-        for name, token in self.get_fields().items():
-            leaves = token.leaf_fields()
-            for subname, subtoken in leaves:
-                fields[f'{name}.{subname}'] = subtoken
-            if not leaves:
-                fields[name] = token
-        return fields
-
 
 @frozen
 class EnumeratedType(TypeToken):
@@ -186,7 +172,7 @@ class EnumeratedType(TypeToken):
         if self.type is DataType.BOOL:
             expected = bool
         elif self.type is DataType.NUMBER:
-            expected = PY_NUMBER
+            expected = (int, float, complex)
         elif self.type is DataType.STRING:
             expected = str
         else:
@@ -277,8 +263,15 @@ class MessageType(TypeToken):
     fields: Mapping[str, TypeToken] = field(factory=dict)
     constants: Mapping[str, Any] = field(factory=dict)
 
-    def get_fields(self) -> Mapping[str, TypeToken]:
-        return self.fields
+    def leaf_fields(self) -> Mapping[str, TypeToken]:
+        fields = {}
+        for name, token in self.fields.items():
+            if token.is_message:
+                for subname, subtoken in token.leaf_fields():
+                    fields[f'{name}.{subname}'] = subtoken
+            else:
+                fields[name] = token
+        return fields
 
 
 @frozen
@@ -297,14 +290,14 @@ class ArrayType(TypeToken):
 ###############################################################################
 
 BOOLEANS: Final[EnumeratedType] = EnumeratedType.booleans()
-UINT8: Final[NumericType] = NumericType.uint8()
-UINT16: Final[NumericType] = NumericType.uint16()
-UINT32: Final[NumericType] = NumericType.uint32()
-UINT64: Final[NumericType] = NumericType.uint64()
-INT8: Final[NumericType] = NumericType.int8()
-INT16: Final[NumericType] = NumericType.int16()
-INT32: Final[NumericType] = NumericType.int32()
-INT64: Final[NumericType] = NumericType.int64()
-FLOAT32: Final[NumericType] = NumericType.float32()
-FLOAT64: Final[NumericType] = NumericType.float64()
-STRINGS: Final[StringType] = StringType('string')
+UINT8: Final[RangedType] = RangedType.uint8()
+UINT16: Final[RangedType] = RangedType.uint16()
+UINT32: Final[RangedType] = RangedType.uint32()
+UINT64: Final[RangedType] = RangedType.uint64()
+INT8: Final[RangedType] = RangedType.int8()
+INT16: Final[RangedType] = RangedType.int16()
+INT32: Final[RangedType] = RangedType.int32()
+INT64: Final[RangedType] = RangedType.int64()
+FLOAT32: Final[RangedType] = RangedType.float32()
+FLOAT64: Final[RangedType] = RangedType.float64()
+STRINGS: Final[TypeToken] = TypeToken('string', type=DataType.STRING)
