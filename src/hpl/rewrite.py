@@ -16,6 +16,23 @@ from hpl.ast.expressions import HplExpression
 ###############################################################################
 
 
+def reshape(expr: HplExpression, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+    diff = {}
+    for attribute in fields(type(expr)):
+        cls = attribute.type
+        name: str = attribute.name
+        is_expr = isinstance(cls, type) and issubclass(cls, HplExpression)
+        is_expr = is_expr or (isinstance(cls, str) and cls in ('HplExpression', 'HplValue'))
+        if is_expr:
+            expr: HplExpression = getattr(expr, name)
+            new: HplExpression = f(expr)
+            if new is not expr:
+                diff[name] = new
+    if not diff:
+        return expr
+    return evolve(expr, **diff)
+
+
 def replace(
     expr: HplExpression,
     test: Callable[['HplExpression'], bool],
