@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Mapping, Optional, Set, Tuple
 
 from attrs import evolve, field, frozen
 from attrs.validators import instance_of
@@ -13,6 +13,7 @@ from attrs.validators import instance_of
 from hpl.ast.base import HplAstObject
 from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplExpression, HplVarReference, Not
 from hpl.errors import HplSanityError
+from hpl.types import TypeToken
 
 ###############################################################################
 # Top-level Predicate
@@ -43,7 +44,7 @@ class HplPredicate(HplAstObject):
     def negate(self) -> 'HplPredicate':
         raise NotImplementedError()
 
-    def join(self, _other: 'HplPredicate') -> 'HplPredicate':
+    def join(self, other: 'HplPredicate') -> 'HplPredicate':
         raise NotImplementedError()
 
     def external_references(self) -> Set[str]:
@@ -55,13 +56,17 @@ class HplPredicate(HplAstObject):
     def contains_self_reference(self) -> bool:
         return self.condition.contains_self_reference()
 
-    def replace_var_reference(self, _alias: str, _expr: HplExpression) -> 'HplPredicate':
+    def replace_var_reference(self, alias: str, expr: HplExpression) -> 'HplPredicate':
         raise NotImplementedError()
 
-    def replace_self_reference(self, _expr: HplExpression) -> 'HplPredicate':
+    def replace_self_reference(self, expr: HplExpression) -> 'HplPredicate':
         raise NotImplementedError()
 
-    def refine_types(self, _type_token, _aliases=None) -> 'HplPredicate':
+    def refine_types(
+        self,
+        type_token: TypeToken,
+        aliases: Optional[Mapping[str, TypeToken]] = None
+    ) -> 'HplPredicate':
         raise NotImplementedError()
 
 
@@ -141,19 +146,21 @@ class HplPredicateExpression(HplPredicate):
         phi: HplExpression = self.expression.replace_self_reference(expr)
         return evolve(self, expression=expr)
 
-    def refine_types(self, rostype, aliases=None):
-        # rostype: ROS Type Token
-        # aliases: string (alias) -> ROS Type Token
+    def refine_types(
+        self,
+        type_token: TypeToken,
+        aliases: Optional[Mapping[str, TypeToken]] = None,
+    ) -> HplPredicate:
         aliases = aliases if aliases is not None else {}
         stack = [self.condition]
         while stack:
             obj = stack.pop()
             if obj.is_accessor:
-                self._refine_type(obj, rostype, aliases)
+                self._refine_type(obj, type_token, aliases)
             else:
                 stack.extend(reversed(obj.children()))
 
-    def _refine_type(self, accessor, rostype, aliases):
+    def _refine_type(self, accessor: HplExpression, type_token: TypeToken, aliases: Optional[Mapping[str, TypeToken]]):
         stack = [accessor]
         expr = accessor.message
         while expr.is_accessor:
@@ -161,7 +168,7 @@ class HplPredicateExpression(HplPredicate):
             expr = expr.message
         assert expr.is_value and (expr.is_this_msg or expr.is_variable)
         if expr.is_this_msg:
-            t = rostype
+            t = type_token
         else:
             if expr.name not in aliases:
                 raise HplSanityError(
