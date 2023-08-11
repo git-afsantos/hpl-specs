@@ -5,9 +5,9 @@
 # Imports
 ###############################################################################
 
-from typing import Any, Callable, Final, Iterable, Optional, Set, Tuple, Type, Union
+from typing import Any, Callable, Final, Iterable, Mapping, Optional, Set, Tuple, Type, Union
 
-from enum import Enum, auto, Flag, unique
+from enum import Enum, unique
 
 from attrs import evolve, field, fields, frozen
 from attrs.validators import deep_iterable, instance_of
@@ -24,7 +24,7 @@ from hpl.grammar import (
     OR_OPERATOR,
     SOME_OPERATOR,
 )
-from hpl.types import DataType
+from hpl.types import DataType, TypeToken
 
 ###############################################################################
 # Expressions
@@ -148,18 +148,29 @@ class HplExpression(HplAstObject):
     ) -> 'HplExpression':
         if test(self):
             return other
+        f = lambda x: x.replace(test, other)
+        return self.reshape(f)
+
+    def refine(
+        self,
+        type_token: TypeToken,
+        external: Optional[Mapping[str, TypeToken]] = None,
+    ) -> 'HplExpression':
+        if external is None:
+            external = {}
+        f = lambda x: x.refine(type_token, external=external)
+        return self.reshape(f)
+
+    def reshape(self, f: Callable[['HplExpression'], 'HplExpression']) -> 'HplExpression':
         diff = {}
         for attribute in fields(type(self)):
             cls = attribute.type
             name: str = attribute.name
-            if isinstance(cls, str) and cls == 'HplExpression':
+            is_expr = isinstance(cls, type) and issubclass(cls, HplExpression)
+            is_expr = is_expr or (isinstance(cls, str) and cls == 'HplExpression')
+            if is_expr:
                 expr: HplExpression = getattr(self, name)
-                new: HplExpression = expr.replace(test, other)
-                if new is not expr:
-                    diff[name] = new
-            elif isinstance(cls, type) and issubclass(cls, HplExpression):
-                expr: HplExpression = getattr(self, name)
-                new: HplExpression = expr.replace(test, other)
+                new: HplExpression = f(expr)
                 if new is not expr:
                     diff[name] = new
         if not diff:
@@ -260,6 +271,28 @@ class HplSet(HplValue):
             return self
         return evolve(self, values=values)
 
+    def refine(
+        self,
+        type_token: TypeToken,
+        external: Optional[Mapping[str, TypeToken]] = None,
+    ) -> HplExpression:
+        values = tuple(expr.refine(type_token, external=external) for expr in self.values)
+        for previous, value in zip(self.values, values):
+            if value is not previous:
+                break
+        else:
+            return self
+        return evolve(self, values=values)
+
+    def reshape(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+        values = tuple(f(expr) for expr in self.values)
+        for previous, value in zip(self.values, values):
+            if value is not previous:
+                break
+        else:
+            return self
+        return evolve(self, values=values)
+
     def __str__(self) -> str:
         return f'{{{", ".join(str(v) for v in self.values)}}}'
 
@@ -299,6 +332,17 @@ class HplRange(HplValue):
             return other
         min_value: HplExpression = self.min_value.replace(test, other)
         max_value: HplExpression = self.max_value.replace(test, other)
+        if min_value is self.min_value and max_value is self.max_value:
+            return self
+        return evolve(self, min_value=min_value, max_value=max_value)
+
+    def refine(
+        self,
+        type_token: TypeToken,
+        external: Optional[Mapping[str, TypeToken]] = None,
+    ) -> HplExpression:
+        min_value: HplExpression = self.min_value.refine(type_token, external=external)
+        max_value: HplExpression = self.max_value.refine(type_token, external=external)
         if min_value is self.min_value and max_value is self.max_value:
             return self
         return evolve(self, min_value=min_value, max_value=max_value)
