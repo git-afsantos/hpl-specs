@@ -7,7 +7,7 @@
 
 from typing import Any, Dict, Iterator, Tuple
 
-from attrs import field, frozen
+from attrs import evolve, field, frozen
 
 ###############################################################################
 # Top-level Classes
@@ -55,3 +55,9 @@ class HplAstObject:
             obj = stack.pop()
             stack.extend(reversed(obj.children()))
             yield obj
+
+    def but(self, **kwargs) -> 'HplAstObject':
+        metadata = kwargs.get('metadata')
+        if metadata is None:
+            metadata = dict(self.metadata)
+        return evolve(self, metadata=metadata, **kwargs)

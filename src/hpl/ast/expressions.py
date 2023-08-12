@@ -9,7 +9,7 @@ from typing import Any, Callable, Final, Iterable, Mapping, Optional, Set, Tuple
 
 from enum import Enum, unique
 
-from attrs import evolve, field, fields, frozen
+from attrs import field, frozen
 from attrs.validators import deep_iterable, instance_of
 
 from hpl.ast.base import HplAstObject
@@ -112,7 +112,7 @@ class HplExpression(HplAstObject):
     def cast(self, t: DataType) -> 'HplExpression':
         try:
             r: DataType = self.data_type.cast(t)
-            return evolve(self, data_type=r)
+            return self.but(data_type=r)
         except TypeError as e:
             raise HplTypeError.in_expr(self, str(e))
 
@@ -146,29 +146,9 @@ class HplExpression(HplAstObject):
         test: Callable[['HplExpression'], bool],
         other: 'HplExpression',
     ) -> 'HplExpression':
-        if test(self):
-            return other
-        f = lambda x: x._replace(test, other)
-        return self.reshape(f, deep=True)
-
-    def _replace(
-        self,
-        test: Callable[['HplExpression'], bool],
-        other: 'HplExpression',
-    ) -> 'HplExpression':
         return other if test(self) else self
 
-    def refine(
-        self,
-        type_token: TypeToken,
-        external: Optional[Mapping[str, TypeToken]] = None,
-    ) -> 'HplExpression':
-        if external is None:
-            external = {}
-        f = lambda x: x._refine(type_token, external)
-        return self.reshape(f, deep=True)
-
-    def _refine(self, token: TypeToken, ext: Mapping[str, TypeToken]) -> 'HplExpression':
+    def refine(self, type_tokens: Mapping[str, TypeToken]) -> 'HplExpression':
         return self
 
     def reshape(
@@ -177,20 +157,10 @@ class HplExpression(HplAstObject):
         *,
         deep: bool = False
     ) -> 'HplExpression':
-        diff = {}
-        for attribute in fields(type(self)):
-            cls = attribute.type
-            name: str = attribute.name
-            is_expr = isinstance(cls, type) and issubclass(cls, HplExpression)
-            is_expr = is_expr or (isinstance(cls, str) and cls == 'HplExpression')
-            if is_expr:
-                expr: HplExpression = getattr(self, name)
-                new: HplExpression = f(expr) if not deep else f(expr.reshape(f))
-                if new is not expr:
-                    diff[name] = new
-        if not diff:
-            return self
-        return evolve(self, **diff)
+        return self
+
+    def _map_subexpr(self, f: Callable[['HplExpression'], 'HplExpression']) -> 'HplExpression':
+        return self
 
 
 def _type_checker(t: DataType) -> Callable[[HplExpression, Any, HplExpression], None]:
@@ -284,7 +254,7 @@ class HplSet(HplValue):
                 break
         else:
             return self
-        return evolve(self, values=values)
+        return self.but(values=values)
 
     def refine(
         self,
@@ -297,7 +267,7 @@ class HplSet(HplValue):
                 break
         else:
             return self
-        return evolve(self, values=values)
+        return self.but(values=values)
 
     def reshape(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
         values = tuple(f(expr) for expr in self.values)
@@ -306,7 +276,16 @@ class HplSet(HplValue):
                 break
         else:
             return self
-        return evolve(self, values=values)
+        return self.but(values=values)
+
+    def _map_subexpr(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+        values = tuple(f(expr) for expr in self.values)
+        for previous, value in zip(self.values, values):
+            if value is not previous:
+                break
+        else:
+            return self
+        return self.but(values=values)
 
     def __str__(self) -> str:
         return f'{{{", ".join(str(v) for v in self.values)}}}'
@@ -361,6 +340,13 @@ class HplRange(HplValue):
         if min_value is self.min_value and max_value is self.max_value:
             return self
         return evolve(self, min_value=min_value, max_value=max_value)
+
+    def _map_subexpr(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+        min_value: HplExpression = f(self.min_value)
+        max_value: HplExpression = f(self.max_value)
+        if min_value is self.min_value and max_value is self.max_value:
+            return self
+        return self.but(min_value=min_value, max_value=max_value)
 
     def __str__(self) -> str:
         lp = '![' if self.exclude_min else '['
