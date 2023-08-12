@@ -155,8 +155,12 @@ class HplExpression(HplAstObject):
         self,
         f: Callable[['HplExpression'], 'HplExpression'],
         *,
-        deep: bool = False
+        deep: bool = False,
     ) -> 'HplExpression':
+        # g = f
+        # if deep:
+        #     g = lambda x: f(x._map_subexpr(g))
+        # return self._map_subexpr(g)
         return self
 
     def _map_subexpr(self, f: Callable[['HplExpression'], 'HplExpression']) -> 'HplExpression':
@@ -269,8 +273,16 @@ class HplSet(HplValue):
             return self
         return self.but(values=values)
 
-    def reshape(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
-        values = tuple(f(expr) for expr in self.values)
+    def reshape(
+        self,
+        f: Callable[[HplExpression], HplExpression],
+        *,
+        deep: bool = False,
+    ) -> HplExpression:
+        if deep:
+            values = tuple(f(expr.reshape(f, deep=True)) for expr in self.values)
+        else:
+            values = tuple(f(expr) for expr in self.values)
         for previous, value in zip(self.values, values):
             if value is not previous:
                 break
@@ -288,7 +300,7 @@ class HplSet(HplValue):
         return self.but(values=values)
 
     def __str__(self) -> str:
-        return f'{{{", ".join(str(v) for v in self.values)}}}'
+        return f'{{{', '.join(str(v) for v in self.values)}}}'
 
 
 def _convert_range_bounds(value: HplExpression) -> HplExpression:
@@ -341,6 +353,22 @@ class HplRange(HplValue):
             return self
         return evolve(self, min_value=min_value, max_value=max_value)
 
+    def reshape(
+        self,
+        f: Callable[[HplExpression], HplExpression],
+        *,
+        deep: bool = False,
+    ) -> HplExpression:
+        if deep:
+            min_value: HplExpression = f(self.min_value.reshape(f, deep=True))
+            max_value: HplExpression = f(self.max_value.reshape(f, deep=True))
+        else:
+            min_value: HplExpression = f(self.min_value)
+            max_value: HplExpression = f(self.max_value)
+        if min_value is self.min_value and max_value is self.max_value:
+            return self
+        return self.but(min_value=min_value, max_value=max_value)
+
     def _map_subexpr(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
         min_value: HplExpression = f(self.min_value)
         max_value: HplExpression = f(self.max_value)
@@ -387,6 +415,17 @@ class HplAtomicValue(HplValue):
         other: HplExpression,
     ) -> HplExpression:
         return other if test(self) else self
+
+    def reshape(
+        self,
+        f: Callable[[HplExpression], HplExpression],
+        *,
+        deep: bool = False,
+    ) -> HplExpression:
+        return self
+
+    def _map_subexpr(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+        return self
 
 
 @frozen
@@ -633,7 +672,30 @@ class HplQuantifier(HplExpression):
         diff = diff or condition is not self.condition
         if not diff:
             return self
-        return evolve(self, domain=domain, condition=condition)
+        return self.but(domain=domain, condition=condition)
+
+    def reshape(
+        self,
+        f: Callable[[HplExpression], HplExpression],
+        *,
+        deep: bool = False,
+    ) -> HplExpression:
+        if deep:
+            domain: HplExpression = f(self.domain.reshape(f, deep=True))
+            condition: HplExpression = f(self.condition.reshape(f, deep=True))
+        else:
+            domain: HplExpression = f(self.domain)
+            condition: HplExpression = f(self.condition)
+        if domain is self.domain and condition is self.condition:
+            return self
+        return self.but(domain=domain, condition=condition)
+
+    def _map_subexpr(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+        domain: HplExpression = f(self.domain)
+        condition: HplExpression = f(self.condition)
+        if domain is self.domain and condition is self.condition:
+            return self
+        return self.but(domain=domain, condition=condition)
 
     def __str__(self) -> str:
         return f'({self.op} {self.x} in {self.d}: {self.p})'
@@ -768,6 +830,26 @@ class HplUnaryOperator(HplExpression):
         if operand is self.operand:
             return self
         return evolve(self, operand=operand)
+
+    def reshape(
+        self,
+        f: Callable[[HplExpression], HplExpression],
+        *,
+        deep: bool = False,
+    ) -> HplExpression:
+        if deep:
+            operand: HplExpression = f(self.operand.reshape(f, deep=True))
+        else:
+            operand: HplExpression = f(self.operand)
+        if operand is self.operand:
+            return self
+        return self.but(operand=operand)
+
+    def _map_subexpr(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+        operand: HplExpression = f(self.operand)
+        if operand is self.operand:
+            return self
+        return self.but(operand=operand)
 
     def __str__(self) -> str:
         op: str = self.operator.token
@@ -1012,6 +1094,29 @@ class HplBinaryOperator(HplExpression):
         if a is self.operand1 and b is self.operand2:
             return self
         return evolve(self, operand1=a, operand2=b)
+
+    def reshape(
+        self,
+        f: Callable[[HplExpression], HplExpression],
+        *,
+        deep: bool = False,
+    ) -> HplExpression:
+        if deep:
+            a: HplExpression = f(self.operand1.reshape(f, deep=True))
+            b: HplExpression = f(self.operand2.reshape(f, deep=True))
+        else:
+            a: HplExpression = f(self.operand1)
+            b: HplExpression = f(self.operand2)
+        if a is self.operand1 and b is self.operand2:
+            return self
+        return self.but(operand1=a, operand2=b)
+
+    def _map_subexpr(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+        a: HplExpression = f(self.operand1)
+        b: HplExpression = f(self.operand2)
+        if a is self.operand1 and b is self.operand2:
+            return self
+        return self.but(operand1=a, operand2=b)
 
     def __str__(self) -> str:
         if self.is_infix:
@@ -1310,6 +1415,32 @@ class HplFunctionCall(HplExpression):
             return self
         return evolve(self, arguments=args)
 
+    def reshape(
+        self,
+        f: Callable[[HplExpression], HplExpression],
+        *,
+        deep: bool = False,
+    ) -> HplExpression:
+        if deep:
+            args = tuple(f(expr.reshape(f, deep=True)) for expr in self.arguments)
+        else:
+            args = tuple(f(expr) for expr in self.arguments)
+        for previous, arg in zip(self.arguments, args):
+            if arg is not previous:
+                break
+        else:
+            return self
+        return self.but(arguments=args)
+
+    def _map_subexpr(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+        args = tuple(f(expr) for expr in self.arguments)
+        for previous, arg in zip(self.arguments, args):
+            if arg is not previous:
+                break
+        else:
+            return self
+        return self.but(arguments=args)
+
     def __str__(self) -> str:
         args = tuple(arg.data_type for arg in self.arguments)
         return f'{self.function.name}{args}'
@@ -1386,6 +1517,22 @@ class HplFieldAccess(HplDataAccess):
             return self
         return evolve(self, message=message)
 
+    def reshape(
+        self,
+        f: Callable[[HplExpression], HplExpression],
+        *,
+        deep: bool = False,
+    ) -> HplExpression:
+        if deep:
+            message: HplExpression = f(self.message.reshape(f, deep=True))
+        else:
+            message: HplExpression = f(self.message)
+        return self if message is self.message else self.but(message=message)
+
+    def _map_subexpr(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+        message: HplExpression = f(self.message)
+        return self if message is self.message else self.but(message=message)
+
     def __str__(self) -> str:
         msg = str(self.message)
         return self.field if not msg else f'{msg}.{self.field}'
@@ -1415,6 +1562,29 @@ class HplArrayAccess(HplDataAccess):
         if array is self.array and index is self.index:
             return self
         return evolve(self, array=array, index=index)
+
+    def reshape(
+        self,
+        f: Callable[[HplExpression], HplExpression],
+        *,
+        deep: bool = False,
+    ) -> HplExpression:
+        if deep:
+            array: HplExpression = f(self.array.reshape(f, deep=True))
+            index: HplExpression = f(self.index.reshape(f, deep=True))
+        else:
+            array: HplExpression = f(self.array)
+            index: HplExpression = f(self.index)
+        if array is self.array and index is self.index:
+            return self
+        return self.but(array=array, index=index)
+
+    def _map_subexpr(self, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
+        array: HplExpression = f(self.array)
+        index: HplExpression = f(self.index)
+        if array is self.array and index is self.index:
+            return self
+        return self.but(array=array, index=index)
 
     def __str__(self) -> str:
         return f'{self.array}[{self.index}]'
