@@ -146,7 +146,10 @@ class HplExpression(HplAstObject):
         test: Callable[['HplExpression'], bool],
         other: 'HplExpression',
     ) -> 'HplExpression':
-        return other if test(self) else self
+        if test(self):
+            return other
+        f = lambda expr: other if test(expr) else expr
+        return self.reshape(f, deep=True)
 
     def refine(self, type_tokens: Mapping[str, TypeToken]) -> 'HplExpression':
         return self
@@ -238,21 +241,6 @@ class HplSet(HplValue):
     def children(self) -> Tuple[HplValue]:
         return self.values
 
-    def replace(
-        self,
-        test: Callable[[HplExpression], bool],
-        other: HplExpression,
-    ) -> HplExpression:
-        if test(self):
-            return other
-        values = tuple(expr.replace(test, other) for expr in self.values)
-        for previous, value in zip(self.values, values):
-            if value is not previous:
-                break
-        else:
-            return self
-        return self.but(values=values)
-
     def refine(
         self,
         type_token: TypeToken,
@@ -312,19 +300,6 @@ class HplRange(HplValue):
 
     def children(self) -> Tuple[HplValue]:
         return (self.min_value, self.max_value)
-
-    def replace(
-        self,
-        test: Callable[[HplExpression], bool],
-        other: HplExpression,
-    ) -> HplExpression:
-        if test(self):
-            return other
-        min_value: HplExpression = self.min_value.replace(test, other)
-        max_value: HplExpression = self.max_value.replace(test, other)
-        if min_value is self.min_value and max_value is self.max_value:
-            return self
-        return evolve(self, min_value=min_value, max_value=max_value)
 
     def refine(
         self,
@@ -633,21 +608,6 @@ class HplQuantifier(HplExpression):
             return True
         return any(expr.contains_definition(alias) for expr in self.children())
 
-    def replace(
-        self,
-        test: Callable[[HplExpression], bool],
-        other: HplExpression,
-    ) -> HplExpression:
-        if test(self):
-            return other
-        domain: HplExpression = self.domain.replace(test, other)
-        diff: bool = domain is not self.domain
-        condition: HplExpression = self.condition.replace(test, other)
-        diff = diff or condition is not self.condition
-        if not diff:
-            return self
-        return self.but(domain=domain, condition=condition)
-
     def reshape(
         self,
         f: Callable[[HplExpression], HplExpression],
@@ -785,18 +745,6 @@ class HplUnaryOperator(HplExpression):
 
     def contains_definition(self, alias: str) -> bool:
         return self.operand.contains_definition(alias)
-
-    def replace(
-        self,
-        test: Callable[[HplExpression], bool],
-        other: HplExpression,
-    ) -> HplExpression:
-        if test(self):
-            return other
-        operand: HplExpression = self.operand.replace(test, other)
-        if operand is self.operand:
-            return self
-        return evolve(self, operand=operand)
 
     def reshape(
         self,
@@ -1042,19 +990,6 @@ class HplBinaryOperator(HplExpression):
 
     def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.operand1, self.operand2)
-
-    def replace(
-        self,
-        test: Callable[[HplExpression], bool],
-        other: HplExpression,
-    ) -> HplExpression:
-        if test(self):
-            return other
-        a: HplExpression = self.operand1.replace(test, other)
-        b: HplExpression = self.operand2.replace(test, other)
-        if a is self.operand1 and b is self.operand2:
-            return self
-        return evolve(self, operand1=a, operand2=b)
 
     def reshape(
         self,
@@ -1354,21 +1289,6 @@ class HplFunctionCall(HplExpression):
     def children(self) -> Tuple[HplExpression]:
         return self.arguments
 
-    def replace(
-        self,
-        test: Callable[[HplExpression], bool],
-        other: HplExpression,
-    ) -> HplExpression:
-        if test(self):
-            return other
-        args = tuple(expr.replace(test, other) for expr in self.arguments)
-        for previous, arg in zip(self.arguments, args):
-            if arg is not previous:
-                break
-        else:
-            return self
-        return evolve(self, arguments=args)
-
     def reshape(
         self,
         f: Callable[[HplExpression], HplExpression],
@@ -1450,18 +1370,6 @@ class HplFieldAccess(HplDataAccess):
     def contains_definition(self, alias: str) -> bool:
         return self.message.contains_definition(alias)
 
-    def replace(
-        self,
-        test: Callable[[HplExpression], bool],
-        other: HplExpression,
-    ) -> HplExpression:
-        if test(self):
-            return other
-        message: HplExpression = self.message.replace(test, other)
-        if message is self.message:
-            return self
-        return evolve(self, message=message)
-
     def reshape(
         self,
         f: Callable[[HplExpression], HplExpression],
@@ -1490,19 +1398,6 @@ class HplArrayAccess(HplDataAccess):
 
     def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.array, self.index)
-
-    def replace(
-        self,
-        test: Callable[[HplExpression], bool],
-        other: HplExpression,
-    ) -> HplExpression:
-        if test(self):
-            return other
-        array: HplExpression = self.array.replace(test, other)
-        index: HplExpression = self.index.replace(test, other)
-        if array is self.array and index is self.index:
-            return self
-        return evolve(self, array=array, index=index)
 
     def reshape(
         self,
