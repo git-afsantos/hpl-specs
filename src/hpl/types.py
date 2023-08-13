@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from typing import Any, Callable, Final, Iterable, Mapping, Optional, Set, Tuple, Type, Union
+from typing import Any, Final, Iterable, Mapping, Tuple
 
 from enum import auto, Flag
 
@@ -162,6 +162,9 @@ class TypeToken:
     def is_set(self) -> bool:
         return self.type.can_be_set
 
+    def __str__(self) -> str:
+        return self.name
+
 
 @frozen
 class EnumeratedType(TypeToken):
@@ -261,7 +264,7 @@ class RangedType(TypeToken):
 class MessageType(TypeToken):
     type: DataType = field(init=False, default=DataType.MESSAGE)
     fields: Mapping[str, TypeToken] = field(factory=dict)
-    constants: Mapping[str, Any] = field(factory=dict)
+    constants: Mapping[str, Tuple[TypeToken, Any]] = field(factory=dict)
 
     def leaf_fields(self) -> Mapping[str, TypeToken]:
         fields = {}
@@ -273,6 +276,13 @@ class MessageType(TypeToken):
                 fields[name] = token
         return fields
 
+    def contains_name(self, name: str) -> bool:
+        return name in self.fields or name in self.constants
+
+    def get_type_of(self, name: str) -> TypeToken:
+        t: TypeToken = self.fields.get(name)
+        return t if t is not None else self.constants[name][0]
+
 
 @frozen
 class ArrayType(TypeToken):
@@ -283,6 +293,9 @@ class ArrayType(TypeToken):
     @property
     def is_fixed_length(self) -> bool:
         return self.length >= 0
+
+    def contains_index(self, index: int) -> bool:
+        return self.length < 0 or self.length > index
 
 
 ###############################################################################
