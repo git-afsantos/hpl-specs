@@ -39,24 +39,6 @@ class HplSanityError(Exception):
         return cls(f'there are no references to message fields in «{obj}»')
 
 
-class HplTypeError(Exception):
-    @classmethod
-    def cannot_cast(cls, initial: str, expected: str, expr: Any):
-        return cls(f'cannot cast from {initial} to {expected}: {expr}')
-
-    @classmethod
-    def untyped(cls, expr: Any):
-        return cls(f'no types left for {{{expr}}}')
-
-    @classmethod
-    def already_defined(cls, topic, ot, nt):
-        return cls(f"Topic '{topic}' cannot be both of type {ot} and type {nt}")
-
-    @classmethod
-    def undefined(cls, topic):
-        return cls(f"Unknown type for topic '{topic}'")
-
-
 class HplSyntaxError(Exception):
     @classmethod
     def duplicate_metadata(cls, key, pid=None):

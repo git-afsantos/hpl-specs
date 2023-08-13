@@ -8,7 +8,7 @@
 from pytest import raises
 
 from hpl.parser import predicate_parser
-from hpl.errors import HplSanityError, HplSyntaxError, HplTypeError
+from hpl.errors import HplSanityError, HplSyntaxError
 
 ###############################################################################
 # Predicate Examples
@@ -48,5 +48,5 @@ BAD_PREDICATES = [
 def test_invalid_predicates():
     parser = predicate_parser()
     for test_str in BAD_PREDICATES:
-        with raises((HplSanityError, HplSyntaxError, HplTypeError)):
+        with raises((HplSanityError, HplSyntaxError, TypeError)):
             parser.parse(test_str)

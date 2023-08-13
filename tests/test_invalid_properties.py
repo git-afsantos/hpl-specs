@@ -8,7 +8,7 @@
 from pytest import raises
 
 from hpl.parser import property_parser
-from hpl.errors import HplSanityError, HplSyntaxError, HplTypeError
+from hpl.errors import HplSanityError, HplSyntaxError
 
 
 ###############################################################################
@@ -43,5 +43,5 @@ BAD_PROPERTIES = [
 def test_invalid_properties():
     parser = property_parser()
     for test_str in BAD_PROPERTIES:
-        with raises((HplSanityError, HplSyntaxError, HplTypeError)):
+        with raises((HplSanityError, HplSyntaxError, TypeError)):
             parser.parse(test_str)
