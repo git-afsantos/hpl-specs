@@ -11,7 +11,7 @@ from attrs import evolve, field, frozen
 from attrs.validators import instance_of
 
 from hpl.ast.base import HplAstObject
-from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplDataAccess, HplExpression, HplVarReference, Not
+from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplExpression, Not
 from hpl.errors import HplSanityError
 from hpl.types import TypeToken
 
@@ -62,11 +62,11 @@ class HplPredicate(HplAstObject):
     def replace_self_reference(self, expr: HplExpression) -> 'HplPredicate':
         raise NotImplementedError()
 
-    def refine_types(
+    def type_check_references(
         self,
-        type_token: TypeToken,
-        aliases: Optional[Mapping[str, TypeToken]] = None
-    ) -> 'HplPredicate':
+        this_msg: TypeToken,
+        variables: Optional[Mapping[str, TypeToken]] = None,
+    ):
         raise NotImplementedError()
 
 
@@ -151,7 +151,7 @@ class HplPredicateExpression(HplPredicate):
         this_msg: TypeToken,
         variables: Optional[Mapping[str, TypeToken]] = None,
     ):
-        return self.condition.type_check_references(this_msg, variables=variables)
+        return self.expression.type_check_references(this_msg, variables=variables)
 
     def __str__(self) -> str:
         return f'{{ {self.expression} }}'
@@ -196,7 +196,11 @@ class HplVacuousTruth(HplPredicate):
     def replace_self_reference(self, _expr: HplExpression) -> HplPredicate:
         return self
 
-    def refine_types(self, rostype, aliases=None):
+    def type_check_references(
+        self,
+        this_msg: TypeToken,
+        variables: Optional[Mapping[str, TypeToken]] = None,
+    ):
         pass
 
     def __str__(self) -> str:
@@ -237,7 +241,11 @@ class HplContradiction(HplPredicate):
     def replace_self_reference(self, _expr: HplExpression) -> HplPredicate:
         return self
 
-    def refine_types(self, rostype, aliases=None):
+    def type_check_references(
+        self,
+        this_msg: TypeToken,
+        variables: Optional[Mapping[str, TypeToken]] = None,
+    ):
         pass
 
     def __str__(self) -> str:
