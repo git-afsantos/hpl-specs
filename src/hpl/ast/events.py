@@ -9,11 +9,11 @@ from enum import Enum, auto
 from typing import Iterator, Optional, Set, Tuple
 
 from attrs import field, frozen
-from attrs.validators import instance_of
+from attrs.validators import instance_of, in_
 
 from hpl.ast.base import HplAstObject
-from hpl.ast.expressions import HplExpression
-from hpl.ast.predicates import HplPredicate
+from hpl.ast.expressions import HplExpression, HplThisMessage
+from hpl.ast.predicates import HplPredicate, HplVacuousTruth
 from hpl.types import TypeToken
 
 ###############################################################################
@@ -60,105 +60,77 @@ class EventType(Enum):
 
 @frozen
 class HplSimpleEvent(HplEvent):
-    event_type: EventType
-    predicate: HplPredicate = field(validator=instance_of(HplPredicate))
     name: str
+    predicate: HplPredicate = field(validator=instance_of(HplPredicate))
+    event_type: EventType = field(validator=in_(EventType))
     alias: Optional[str] = None
-    msg_type: Optional[TypeToken] = None
+    message_type: Optional[TypeToken] = None
 
-    def __init__(self, event_type, predicate, topic, alias=None):
-        if event_type != self.PUBLISH:
-            raise ValueError(event_type)
-        if not predicate.is_predicate:
-            raise TypeError("not a predicate: " + str(predicate))
-        if alias:
-            predicate.replace_self_reference(alias)
+    def __attrs_post_init__(self):
+        if self.alias:
+            phi = self.predicate.replace_var_reference(self.alias, HplThisMessage())
+            object.__setattr__(self, 'predicate', phi)
 
     @property
-    def is_simple_event(self):
+    def is_simple_event(self) -> bool:
         return True
 
     @classmethod
-    def publish(cls, topic, predicate=None, alias=None):
+    def publish(
+        cls,
+        name: str,
+        predicate: Optional[HplPredicate] = None,
+        alias: Optional[str] = None
+    ) -> 'HplSimpleEvent':
         if predicate is None:
             predicate = HplVacuousTruth()
-        return cls(cls.PUBLISH, predicate, topic, alias=alias)
+        return cls(name, predicate, EventType.PUBLISH, alias=alias)
 
     @property
     def is_publish(self):
         return self.event_type == self.PUBLISH
 
     @property
-    def phi(self):
+    def phi(self) -> HplPredicate:
         return self.predicate
 
-    @property
-    def ros_type(self):
-        return self.msg_type
-
-    def children(self):
+    def children(self) -> Tuple[HplPredicate]:
         return (self.predicate,)
 
-    def aliases(self):
+    def aliases(self) -> Tuple[str]:
         if self.alias is None:
             return ()
         return (self.alias,)
 
-    def external_references(self):
-        refs = set()
-        for obj in self.predicate.iterate():
-            if obj.is_expression and obj.is_accessor:
-                if obj.is_field and obj.message.is_value:
-                    if obj.message.is_variable:
-                        refs.add(obj.message.name)
-        if self.alias is not None:
+    def external_references(self) -> Set[str]:
+        refs = self.predicate.external_references()
+        if self.alias:
             refs.discard(self.alias)
         return refs
 
-    def contains_reference(self, alias):
+    def contains_reference(self, alias: str) -> bool:
         return self.predicate.contains_reference(alias)
 
-    def refine_types(self, rostype, aliases=None):
-        if self.msg_type is not None:
-            if rostype == self.msg_type:
-                return
-            raise HplTypeError.already_defined(
-                self.topic, self.msg_type, rostype)
-        self.predicate.refine_types(rostype, aliases=aliases)
+    def contains_self_reference(self) -> bool:
+        it_does: bool = self.predicate.contains_self_reference()
+        if it_does:
+            return True
+        return self.alias and self.predicate.contains_reference(self.alias)
 
-    def simple_events(self):
+    def replace_var_reference(self, alias: str, expr: HplExpression) -> HplEvent:
+        phi = self.predicate.replace_var_reference(alias, expr)
+        return self.but(predicate=phi)
+
+    def simple_events(self) -> Iterator[HplEvent]:
         yield self
 
-    def clone(self):
-        p = self.predicate.clone()
-        event = HplSimpleEvent(self.event_type, p, self.topic, alias=self.alias)
-        event.msg_type = self.msg_type
-        return event
-
-    def __eq__(self, other):
-        if not isinstance(other, HplSimpleEvent):
-            return False
-        return (self.event_type == other.event_type
-                and self.predicate == other.predicate
-                and self.topic == other.topic)
-
-    def __hash__(self):
-        h = 31 * hash(self.event_type) + hash(self.predicate)
-        return 31 * h + hash(self.topic)
-
-    def __str__(self):
-        alias = (" as " + self.alias) if self.alias is not None else ""
-        if self.event_type == self.PUBLISH:
-            return "{}{} {}".format(self.topic, alias, self.predicate)
-        else:
-            assert False, "unexpected event type"
-
-    def __repr__(self):
-        return "{}({}, {}, {}, alias={})".format(
-            type(self).__name__, repr(self.event_type), repr(self.predicate),
-            repr(self.topic), repr(self.alias))
+    def __str__(self) -> str:
+        alias = (' as ' + self.alias) if self.alias is not None else ''
+        assert self.is_publish, f'event_type: {self.event_type}'
+        return f'{self.name}{alias} {self.predicate}'
 
 
+@frozen
 class HplEventDisjunction(HplEvent):
     __slots__ = ("event1", "event2")
 

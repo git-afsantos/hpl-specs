@@ -7,7 +7,7 @@
 
 from typing import Dict, List, Mapping, Optional, Set, Tuple
 
-from attrs import evolve, field, frozen
+from attrs import field, frozen
 from attrs.validators import instance_of
 
 from hpl.ast.base import HplAstObject
@@ -140,11 +140,11 @@ class HplPredicateExpression(HplPredicate):
 
     def replace_var_reference(self, alias: str, expr: HplExpression) -> HplPredicate:
         phi: HplExpression = self.expression.replace_var_reference(alias, expr)
-        return evolve(self, expression=phi)
+        return self.but(expression=phi)
 
     def replace_self_reference(self, expr: HplExpression) -> HplPredicate:
         phi: HplExpression = self.expression.replace_self_reference(expr)
-        return evolve(self, expression=phi)
+        return self.but(expression=phi)
 
     def type_check_references(
         self,
