@@ -1262,7 +1262,7 @@ class HplFunctionCall(HplExpression):
 
     @arguments.validator
     def _check_arguments(self, _attribute, args: Tuple[HplExpression]):
-        self.function.check_arguments(args: Tuple[HplExpression])
+        self.function.check_arguments(args)
 
     def __attrs_post_init__(self):
         object.__setattr__(self, 'data_type', self.function.result)
@@ -1447,7 +1447,7 @@ class HplArrayAccess(HplDataAccess):
         t: ArrayType = token
         i: HplExpression = self.index
         if i.is_value and i.is_literal and not t.contains_index(i.value):
-            raise index_out_of_range(t, j.value, self)
+            raise index_out_of_range(t, i.value, self)
         return t.subtype
 
     def __str__(self) -> str:
