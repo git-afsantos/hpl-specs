@@ -12,6 +12,10 @@ from typing import Any
 ###############################################################################
 
 
+def type_error_in_expr(error: TypeError, expr: Any) -> TypeError:
+    return TypeError(f'type error in expression «{expr}»: {error}')
+
+
 def invalid_type(expected: str, found: str, obj: Any) -> TypeError:
     return TypeError(f'expected type {expected} but found {found} in «{obj}»')
 
@@ -36,14 +40,6 @@ class HplSanityError(Exception):
 
 
 class HplTypeError(Exception):
-    @classmethod
-    def in_expr(cls, expr: Any, details: str):
-        return cls(f'Type error in expression {{{expr}}}: {details}')
-
-    @classmethod
-    def unexpected(cls, expected: str, found: str, expr: Any):
-        return cls(f'expected {expected} but found {found}: {expr}')
-
     @classmethod
     def cannot_cast(cls, initial: str, expected: str, expr: Any):
         return cls(f'cannot cast from {initial} to {expected}: {expr}')
