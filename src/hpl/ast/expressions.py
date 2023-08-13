@@ -13,7 +13,7 @@ from attrs import field, frozen
 from attrs.validators import deep_iterable, instance_of
 
 from hpl.ast.base import HplAstObject
-from hpl.errors import HplSanityError, HplTypeError, index_out_of_range, missing_field
+from hpl.errors import HplSanityError, HplTypeError, index_out_of_range, missing_field, type_error_in_expr
 from hpl.grammar import (
     ALL_OPERATOR,
     AND_OPERATOR,
@@ -114,13 +114,13 @@ class HplExpression(HplAstObject):
             r: DataType = self.data_type.cast(t)
             return self.but(data_type=r)
         except TypeError as e:
-            raise HplTypeError.in_expr(self, str(e))
+            raise type_error_in_expr(e, self)
 
     def _type_check(self, expr: 'HplExpression', t: DataType):
         try:
             expr.data_type.cast(t)
         except TypeError as e:
-            raise HplTypeError.in_expr(self, str(e))
+            raise type_error_in_expr(e, self)
 
     def external_references(self) -> Set[str]:
         return set().union(expr.external_references() for expr in self.children())
@@ -1054,7 +1054,16 @@ class FunctionDefinition:
     @property
     def result(self) -> DataType:
         return DataType.union(sig.result for sig in self.overloads)
-    
+
+    def check_arguments(self, args: Tuple[HplExpression]):
+        types = tuple(arg.data_type for arg in args)
+        for sig in self.overloads:
+            if sig.accepts(types):
+                return
+        expected = self.get_parameter_type_string()
+        # error = f'arguments do not match {expected}'
+        raise TypeError(f"function '{self.name}' expects {expected} but got {types}")
+
     def get_parameter_type_string(self) -> str:
         result = []
         for sig in self.overloads:
@@ -1253,14 +1262,7 @@ class HplFunctionCall(HplExpression):
 
     @arguments.validator
     def _check_arguments(self, _attribute, args: Tuple[HplExpression]):
-        types = tuple(arg.data_type for arg in args)
-        for sig in self.function.overloads:
-            if sig.accepts(types):
-                return
-        expected = self.function.get_parameter_type_string()
-        # error = f'arguments do not match {expected}'
-        error = f"function '{self.function.name}' expects {expected}, but got {types}."
-        raise HplTypeError.in_expr(self, error)
+        self.function.check_arguments(args: Tuple[HplExpression])
 
     def __attrs_post_init__(self):
         object.__setattr__(self, 'data_type', self.function.result)
