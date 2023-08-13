@@ -11,7 +11,7 @@ from attrs import evolve, field, frozen
 from attrs.validators import instance_of
 
 from hpl.ast.base import HplAstObject
-from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplExpression, HplVarReference, Not
+from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplDataAccess, HplExpression, HplVarReference, Not
 from hpl.errors import HplSanityError
 from hpl.types import TypeToken
 
@@ -144,72 +144,14 @@ class HplPredicateExpression(HplPredicate):
 
     def replace_self_reference(self, expr: HplExpression) -> HplPredicate:
         phi: HplExpression = self.expression.replace_self_reference(expr)
-        return evolve(self, expression=expr)
+        return evolve(self, expression=phi)
 
-    def refine_types(
+    def type_check_references(
         self,
-        type_token: TypeToken,
-        aliases: Optional[Mapping[str, TypeToken]] = None,
-    ) -> HplPredicate:
-        aliases = aliases if aliases is not None else {}
-        stack = [self.condition]
-        while stack:
-            obj = stack.pop()
-            if obj.is_accessor:
-                self._refine_type(obj, type_token, aliases)
-            else:
-                stack.extend(reversed(obj.children()))
-
-    def _refine_type(self, accessor: HplExpression, type_token: TypeToken, aliases: Optional[Mapping[str, TypeToken]]):
-        stack = [accessor]
-        expr = accessor.message
-        while expr.is_accessor:
-            stack.append(expr)
-            expr = expr.message
-        assert expr.is_value and (expr.is_this_msg or expr.is_variable)
-        if expr.is_this_msg:
-            t = type_token
-        else:
-            if expr.name not in aliases:
-                raise HplSanityError(
-                    "undefined message alias: '{}'".format(expr.name))
-            t = aliases[expr.name]
-        assert t.is_message
-        expr.ros_type = t
-        while stack:
-            expr = stack.pop()
-            if expr.is_field:
-                if not (t.is_message or expr.field in t.fields
-                        or expr.field in t.constants):
-                    raise HplTypeError.ros_field(t, expr.field, expr)
-                if expr.field in t.fields:
-                    t = t.fields[expr.field]
-                else:
-                    assert expr.field in t.constants, \
-                        "'{}' not in {} or {}".format(
-                            expr.field, t.fields, t.constants)
-                    t = t.constants[expr.field].ros_type
-            else:
-                assert expr.is_indexed
-                if not t.is_array:
-                    raise HplTypeError.ros_array(t, expr)
-                i = expr.index
-                if (i.is_value and i.is_literal
-                        and not t.contains_index(i.value)):
-                    raise HplTypeError.ros_index(t, expr.index, expr)
-                t = t.type_token
-            if t.is_message:
-                accessor._type_check(expr, T_MSG)
-            elif t.is_array:
-                accessor._type_check(expr, T_ARR)
-            elif t.is_number:
-                accessor._type_check(expr, T_NUM)
-                # TODO check that values fit within types
-            elif t.is_bool:
-                accessor._type_check(expr, T_BOOL)
-            elif t.is_string:
-                accessor._type_check(expr, T_STR)
-            expr.ros_type = t
+        this_msg: TypeToken,
+        variables: Optional[Mapping[str, TypeToken]] = None,
+    ):
+        return self.condition.type_check_references(this_msg, variables=variables)
 
     def __str__(self) -> str:
         return f'{{ {self.expression} }}'
