@@ -12,8 +12,16 @@ from typing import Any
 ###############################################################################
 
 
-def invalid_type(expected: str, found: str, obj: Any) -> None:
-    raise TypeError(f'expected type {expected} but found {found} in {{{obj}}}')
+def invalid_type(expected: str, found: str, obj: Any) -> TypeError:
+    return TypeError(f'expected type {expected} but found {found} in «{obj}»')
+
+
+def missing_field(type_token: Any, field: str, obj: Any) -> TypeError:
+    return TypeError(f"type '{type_token}' has no field '{field}' in «{obj}»")
+
+
+def index_out_of_range(t_array: Any, idx: int, obj: Any) -> IndexError:
+    return IndexError(f"index {idx} out of range in type '{t_array}' in «{obj}»")
 
 
 ###############################################################################
@@ -28,18 +36,6 @@ class HplSanityError(Exception):
 
 
 class HplTypeError(Exception):
-    @classmethod
-    def ros_field(cls, rostype, field, expr):
-        return cls(f"ROS '{rostype}' has no field '{field}': {expr}")
-
-    @classmethod
-    def ros_array(cls, rostype, expr):
-        return cls(f"ROS '{rostype}' is not an array: {expr}")
-
-    @classmethod
-    def ros_index(cls, rostype, idx, expr):
-        return cls(f"ROS '{rostype}' index {idx} out of range: {expr}")
-
     @classmethod
     def in_expr(cls, expr: Any, details: str):
         return cls(f'Type error in expression {{{expr}}}: {details}')
