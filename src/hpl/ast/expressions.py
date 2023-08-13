@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from typing import Any, Callable, Final, Iterable, Mapping, Optional, Set, Tuple, Type, Union
+from typing import Any, Callable, Final, Iterable, List, Mapping, Optional, Set, Tuple, Type, Union
 
 from enum import Enum, unique
 
@@ -13,7 +13,7 @@ from attrs import field, frozen
 from attrs.validators import deep_iterable, instance_of
 
 from hpl.ast.base import HplAstObject
-from hpl.errors import HplSanityError, HplTypeError
+from hpl.errors import HplSanityError, HplTypeError, index_out_of_range, missing_field
 from hpl.grammar import (
     ALL_OPERATOR,
     AND_OPERATOR,
@@ -24,7 +24,7 @@ from hpl.grammar import (
     OR_OPERATOR,
     SOME_OPERATOR,
 )
-from hpl.types import DataType, TypeToken
+from hpl.types import ArrayType, DataType, MessageType, TypeToken
 
 ###############################################################################
 # Expressions
@@ -151,9 +151,6 @@ class HplExpression(HplAstObject):
         f = lambda expr: other if test(expr) else expr
         return self.reshape(f, deep=True)
 
-    def refine(self, type_tokens: Mapping[str, TypeToken]) -> 'HplExpression':
-        return self
-
     def reshape(
         self,
         f: Callable[['HplExpression'], 'HplExpression'],
@@ -161,6 +158,20 @@ class HplExpression(HplAstObject):
         deep: bool = False,
     ) -> 'HplExpression':
         return self
+
+    def type_check_references(
+        self,
+        this_msg: TypeToken,
+        variables: Optional[Mapping[str, TypeToken]] = None,
+    ):
+        variables = variables if variables is not None else {}
+        stack = [self]
+        while stack:
+            obj = stack.pop()
+            if obj.is_accessor:
+                obj.type_check_references(this_msg, variables)
+            else:
+                stack.extend(reversed(obj.children()))
 
 
 def _type_checker(t: DataType) -> Callable[[HplExpression, Any, HplExpression], None]:
@@ -241,19 +252,6 @@ class HplSet(HplValue):
     def children(self) -> Tuple[HplValue]:
         return self.values
 
-    def refine(
-        self,
-        type_token: TypeToken,
-        external: Optional[Mapping[str, TypeToken]] = None,
-    ) -> HplExpression:
-        values = tuple(expr.refine(type_token, external=external) for expr in self.values)
-        for previous, value in zip(self.values, values):
-            if value is not previous:
-                break
-        else:
-            return self
-        return self.but(values=values)
-
     def reshape(
         self,
         f: Callable[[HplExpression], HplExpression],
@@ -300,17 +298,6 @@ class HplRange(HplValue):
 
     def children(self) -> Tuple[HplValue]:
         return (self.min_value, self.max_value)
-
-    def refine(
-        self,
-        type_token: TypeToken,
-        external: Optional[Mapping[str, TypeToken]] = None,
-    ) -> HplExpression:
-        min_value: HplExpression = self.min_value.refine(type_token, external=external)
-        max_value: HplExpression = self.max_value.refine(type_token, external=external)
-        if min_value is self.min_value and max_value is self.max_value:
-            return self
-        return evolve(self, min_value=min_value, max_value=max_value)
 
     def reshape(
         self,
@@ -1345,6 +1332,33 @@ class HplDataAccess(HplExpression):
         assert obj.is_value
         return obj
 
+    def type_check_references(
+        self,
+        this_msg: TypeToken,
+        variables: Optional[Mapping[str, TypeToken]] = None,
+    ):
+        if variables is None:
+            variables = {}
+        stack: List[HplDataAccess] = [self]
+        expr = self.object
+        while expr.is_accessor:
+            stack.append(expr)
+            expr = expr.object
+        assert expr.is_value and (expr.is_this_msg or expr.is_variable)
+        t = this_msg if expr.is_this_msg else variables.get(expr.name)
+        if t is None:
+            raise HplSanityError(f"no type token for '{expr.name}'")
+        assert t.is_message
+        # expr.message_type = t
+        while stack:
+            expr = stack.pop()
+            t = expr._get_next_token(t)
+            self._type_check(expr, t.type)
+            # expr.message_type = t
+
+    def _get_next_token(self, token: TypeToken) -> TypeToken:
+        raise NotImplementedError()
+
 
 @frozen
 class HplFieldAccess(HplDataAccess):
@@ -1382,6 +1396,16 @@ class HplFieldAccess(HplDataAccess):
             message: HplExpression = f(self.message)
         return self if message is self.message else self.but(message=message)
 
+    def _get_next_token(self, token: TypeToken) -> TypeToken:
+        if not token.is_message:
+            raise TypeError(f'expected a message TypeToken but got {token!r}')
+        t: MessageType = token
+        if self.field in t.fields:
+            return t.fields[self.field]
+        if self.field in t.constants:
+            return t.constants[self.field][0]
+        raise missing_field(token, self.field, self)
+
     def __str__(self) -> str:
         msg = str(self.message)
         return self.field if not msg else f'{msg}.{self.field}'
@@ -1414,6 +1438,15 @@ class HplArrayAccess(HplDataAccess):
         if array is self.array and index is self.index:
             return self
         return self.but(array=array, index=index)
+
+    def _get_next_token(self, token: TypeToken) -> TypeToken:
+        if not token.is_array:
+            raise TypeError(f'expected an array TypeToken but got {token!r}')
+        t: ArrayType = token
+        i: HplExpression = self.index
+        if i.is_value and i.is_literal and not t.contains_index(i.value):
+            raise index_out_of_range(t, j.value, self)
+        return t.subtype
 
     def __str__(self) -> str:
         return f'{self.array}[{self.index}]'
