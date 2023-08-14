@@ -24,6 +24,14 @@ def missing_field(type_token: Any, field: str, obj: Any) -> TypeError:
     return TypeError(f"type '{type_token}' has no field '{field}' in «{obj}»")
 
 
+def invalid_attr(key: str, expected: Any, found: Any, obj: Any) -> ValueError:
+    return ValueError(f'expected {key}={expected!r} but got {found!r} in «{obj}»')
+
+
+def expected_not_none(key: str, obj: Any) -> ValueError:
+    return ValueError(f'expected {key} != None in «{obj}»')
+
+
 def index_out_of_range(t_array: Any, idx: int, obj: Any) -> IndexError:
     return IndexError(f"index {idx} out of range in type '{t_array}' in «{obj}»")
 
