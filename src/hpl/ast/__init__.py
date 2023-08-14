@@ -34,7 +34,14 @@ from hpl.ast.expressions import (
     Or,
     QuantifierType,
 )
-from hpl.ast.predicates import HplContradiction, HplPredicate, HplPredicateExpression, HplVacuousTruth
+from hpl.ast.events import HplEvent, HplEventDisjunction, HplSimpleEvent
+from hpl.ast.predicates import (
+    HplContradiction,
+    HplPredicate,
+    HplPredicateExpression,
+    HplVacuousTruth,
+)
+from hpl.ast.specs import HplSpecification
 from hpl.types import (
     ARRAY_TYPE,
     BOOLEANS,
