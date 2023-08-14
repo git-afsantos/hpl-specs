@@ -38,6 +38,10 @@ class HplSanityError(Exception):
     def predicate_without_self_refs(cls, obj) -> 'HplSanityError':
         return cls(f'there are no references to message fields in «{obj}»')
 
+    @classmethod
+    def duplicate_event(cls, name: str, obj) -> 'HplSanityError':
+        return cls(f"channel '{name}' appears multiple times in «{obj}»")
+
 
 class HplSyntaxError(Exception):
     @classmethod
