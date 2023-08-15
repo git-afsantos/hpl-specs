@@ -5,111 +5,75 @@
 # Imports
 ###############################################################################
 
-from typing import Callable
+from typing import Tuple, TypeVar, Union
 
-from attrs import evolve, fields
+from hpl.ast.expressions import (
+    And,
+    Forall,
+    HplBinaryOperator,
+    HplExpression,
+    HplFunctionCall,
+    HplLiteral,
+    HplQuantifier,
+    HplThisMessage,
+    HplUnaryOperator,
+    HplVarReference,
+    Not,
+    Or,
+    is_self_reference,
+    is_var_reference,
+)
+from hpl.ast.predicates import (
+    HplContradiction,
+    HplPredicate,
+    HplPredicateExpression,
+    HplVacuousTruth,
+)
+from hpl.errors import invalid_type
 
-from hpl.ast.expressions import HplExpression
+###############################################################################
+# Constants
+###############################################################################
+
+P = TypeVar('P', HplPredicate, HplExpression)
 
 ###############################################################################
 # Formula Rewriting
 ###############################################################################
 
 
-def reshape(expr: HplExpression, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
-    diff = {}
-    for attribute in fields(type(expr)):
-        cls = attribute.type
-        name: str = attribute.name
-        is_expr = isinstance(cls, type) and issubclass(cls, HplExpression)
-        is_expr = is_expr or (isinstance(cls, str) and cls in ('HplExpression', 'HplValue'))
-        if is_expr:
-            expr: HplExpression = getattr(expr, name)
-            new: HplExpression = f(expr)
-            if new is not expr:
-                diff[name] = new
-    if not diff:
-        return expr
-    return evolve(expr, **diff)
-
-
-def replace(
-    expr: HplExpression,
-    test: Callable[['HplExpression'], bool],
-    other: HplExpression,
-) -> HplExpression:
-    if test(expr):
-        return other
-    diff = {}
-    for attribute in fields(type(expr)):
-        cls = attribute.type
-        name: str = attribute.name
-        is_valid_type = isinstance(cls, type) and issubclass(cls, HplExpression)
-        is_valid_type = is_valid_type or cls in ('HplExpression', 'HplValue')
-        if is_valid_type:
-            current: HplExpression = getattr(expr, name)
-            new: HplExpression = replace(current, test, other)
-            if new is not current:
-                diff[name] = new
-    if not diff:
-        return expr
-    return evolve(expr, **diff)
-
-
-def replace_this_with_var(predicate_or_expression, alias):
+def replace_this_with_var(predicate_or_expression: P, alias: str) -> P:
     if (not predicate_or_expression.is_predicate
             and not predicate_or_expression.is_expression):
-        raise TypeError("expected HplPredicate or HplExpression: "
-                        + repr(predicate_or_expression))
+        raise invalid_type('HplPredicate or HplExpression', predicate_or_expression)
     if not isinstance(alias, str):
-        raise TypeError("expected string alias: " + repr(alias))
-    if predicate_or_expression.is_predicate:
-        if predicate_or_expression.is_vacuous:
-            return
-        expr = predicate_or_expression.condition
-    else:
-        expr = predicate_or_expression
-    for obj in expr.iterate():
-        assert obj.is_expression
-        if obj.is_accessor:
-            if obj.is_field and obj.message.is_value:
-                if obj.message.is_this_msg:
-                    msg = HplVarReference("@" + alias)
-                    msg.ros_type = obj.message.ros_type
-                    obj.message = msg
-                    obj._type_check(msg, T_MSG)
+        raise invalid_type('string', alias)
+    var = HplVarReference(f'@{alias}')
+    if predicate_or_expression.is_expression:
+        if is_self_reference(predicate_or_expression):
+            return var
+    return predicate_or_expression.replace_self_reference(var)
 
-def replace_var_with_this(predicate_or_expression, alias):
+
+def replace_var_with_this(predicate_or_expression: P, alias: str) -> P:
     if (not predicate_or_expression.is_predicate
             and not predicate_or_expression.is_expression):
-        raise TypeError("expected HplPredicate or HplExpression: "
-                        + repr(predicate_or_expression))
+        raise invalid_type('HplPredicate or HplExpression', predicate_or_expression)
     if not isinstance(alias, str):
-        raise TypeError("expected string alias: " + repr(alias))
-    if predicate_or_expression.is_predicate:
-        if predicate_or_expression.is_vacuous:
-            return
-        expr = predicate_or_expression.condition
-    else:
-        expr = predicate_or_expression
-    for obj in expr.iterate():
-        assert obj.is_expression
-        if obj.is_accessor:
-            if obj.is_field and obj.message.is_value:
-                if obj.message.is_variable and obj.message.name == alias:
-                    msg = HplThisMessage()
-                    msg.ros_type = obj.message.ros_type
-                    obj.message = msg
-                    obj._type_check(msg, T_MSG)
+        raise invalid_type('string', alias)
+    this = HplThisMessage()
+    if predicate_or_expression.is_expression:
+        if is_var_reference(predicate_or_expression, alias=alias):
+            return this
+    return predicate_or_expression.replace_var_reference(alias, this)
 
 
-def refactor_reference(predicate_or_expression, alias):
+def refactor_reference(predicate_or_expression: P, alias: str) -> Tuple[P, P]:
     if (not predicate_or_expression.is_predicate
             and not predicate_or_expression.is_expression):
-        raise TypeError("expected HplPredicate or HplExpression: "
-                        + repr(predicate_or_expression))
+        raise invalid_type('HplPredicate or HplExpression', predicate_or_expression)
     if not isinstance(alias, str):
-        raise TypeError("expected string alias: " + repr(alias))
+        raise invalid_type('string', alias)
     if predicate_or_expression.is_predicate:
         return _refactor_ref_pred(predicate_or_expression, alias)
     else:
@@ -119,25 +83,15 @@ def refactor_reference(predicate_or_expression, alias):
 # Formula Rewriting - Helper Functions
 ###############################################################################
 
-def _refactor_ref_pred(phi, alias):
+
+def _refactor_ref_pred(phi: HplPredicate, alias: str) -> Tuple[HplPredicate, HplPredicate]:
     if phi.is_vacuous:
         return (phi, HplVacuousTruth())
-    expressions = _refactor_ref_expr(phi.condition, alias)
-    predicates = []
-    for expr in expressions:
-        assert expr.can_be_bool
-        if expr.is_value and expr.is_literal:
-            assert isinstance(expr.value, bool)
-            if expr.value:
-                psi = HplVacuousTruth()
-            else:
-                psi = HplContradiction()
-        else:
-            psi = HplPredicate(expr)
-        predicates.append(psi)
-    return tuple(predicates)
+    expr1, expr2 = _refactor_ref_expr(phi.condition, alias)
+    return tuple(predicate_from_expression(expr1), predicate_from_expression(expr2))
 
-def _refactor_ref_expr(expr, alias):
+
+def _refactor_ref_expr(expr: HplExpression, alias: str) -> Tuple[HplExpression, HplExpression]:
     if not expr.contains_reference(alias):
         return (expr, true())
     if not expr.can_be_bool:
@@ -150,12 +104,12 @@ def _refactor_ref_expr(expr, alias):
         return _split_quantifier(expr, alias)
     if expr.is_operator:
         return _split_operator(expr, alias)
-    assert False, "unknown expression type: " + repr(expr)
+    raise TypeError(f'unknown expression type: {expr!r}')
 
-def _split_quantifier(quant, alias):
+
+def _split_quantifier(quant: HplQuantifier, alias: str) -> Tuple[HplExpression, HplExpression]:
     var = quant.variable
-    dom = quant.domain
-    if dom.contains_reference(alias):
+    if quant.domain.contains_reference(alias):
         # move the whole expression
         return (true(), quant)
     expr = quant.condition
@@ -172,23 +126,23 @@ def _split_quantifier(quant, alias):
             vb = expr.b.contains_reference(var)
             if a and not b:
                 if va:
-                    qa = Forall(var, dom.clone(), expr.a, shadow=True)
+                    qa = Forall(var, quant.domain, expr.a)
                 else:
-                    qa = Or(empty_test(dom.clone()), expr.a)
+                    qa = Or(empty_test(quant.domain), expr.a)
                 if vb:
-                    qb = Forall(var, dom, expr.b, shadow=True)
+                    qb = Forall(var, quant.domain, expr.b)
                 else:
-                    qb = Or(empty_test(dom), expr.b)
+                    qb = Or(empty_test(quant.domain), expr.b)
                 return (qb, qa)
             if b and not a:
                 if va:
-                    qa = Forall(var, dom, expr.a, shadow=True)
+                    qa = Forall(var, quant.domain, expr.a)
                 else:
-                    qa = Or(empty_test(dom), expr.a)
+                    qa = Or(empty_test(quant.domain), expr.a)
                 if vb:
-                    qb = Forall(var, dom.clone(), expr.b, shadow=True)
+                    qb = Forall(var, quant.domain, expr.b)
                 else:
-                    qb = Or(empty_test(dom.clone()), expr.b)
+                    qb = Or(empty_test(quant.domain), expr.b)
                 return (qa, qb)
             assert a and b
         # move everything
@@ -198,14 +152,20 @@ def _split_quantifier(quant, alias):
         # (E x: p | q)  ==  ((E x: p) | (E x: q))
         # move everything, not worth splitting disjunctions
         return (true(), quant)
-    assert False, "unknown quantifier: " + quant.quantifier
+    raise TypeError(f'unknown quantifier type: {quant!r}')
 
-def _split_operator(op, alias):
+
+def _split_operator(
+    op: Union[HplUnaryOperator, HplBinaryOperator],
+    alias: str
+) -> Tuple[HplExpression, HplExpression]:
     if op.arity == 1:
-        assert op.operator == OP_NOT
+        assert isinstance(op, HplUnaryOperator)
+        assert op.operator.is_not
         return _split_negation(op, alias)
     else:
         assert op.arity == 2
+        assert isinstance(op, HplBinaryOperator)
         if is_and(op):
             a = op.a.contains_reference(alias)
             b = op.b.contains_reference(alias)
@@ -217,18 +177,20 @@ def _split_operator(op, alias):
         # cannot split into two parts
         return (true(), op)
 
-def _split_negation(neg, alias):
+
+def _split_negation(neg: HplUnaryOperator, alias: str) -> Tuple[HplExpression, HplExpression]:
     expr = neg.operand
     assert expr.can_be_bool and expr.contains_reference(alias)
     if expr.is_value or expr.is_accessor or expr.is_function_call:
         # cannot split into two parts
         return (true(), neg)
     if expr.is_quantifier:
+        assert isinstance(expr,HplQuantifier)
         if expr.is_existential:
             # (~E x: p)  ==  (A x: ~p)
             p = Not(expr.condition)
             assert p.contains_reference(expr.variable)
-            expr = Forall(expr.variable, expr.domain, p, shadow=True)
+            expr = Forall(expr.variable, expr.domain, p)
             return _split_quantifier(expr, alias)
         # TODO optimize for other (harder) cases
         return (true(), neg)
@@ -246,41 +208,60 @@ def _split_negation(neg, alias):
             return _split_operator(expr, alias)
         # cannot split into two parts
         return (true(), neg)
-    assert False, "unknown expression type: " + repr(expr)
+    raise TypeError(f'unknown expression type: {expr!r}')
+
+
+def predicate_from_expression(expr: HplExpression) -> HplPredicate:
+    assert expr.can_be_bool
+    if expr.is_value and expr.is_literal:
+        assert isinstance(expr, HplLiteral)
+        assert isinstance(expr.value, bool)
+        return HplVacuousTruth() if expr.value else HplContradiction()
+    return HplPredicateExpression(expr)
 
 
 ###############################################################################
 # Convenience Logic Tests
 ###############################################################################
 
-def is_not(expr):
-    return expr.is_operator and expr.arity == 1 and expr.operator == OP_NOT
 
-def is_and(expr):
-    return expr.is_operator and expr.arity == 2 and expr.operator == OP_AND
+def is_not(expr: HplExpression) -> bool:
+    return expr.is_operator and expr.arity == 1 and expr.operator.is_not
 
-def is_or(expr):
-    return expr.is_operator and expr.arity == 2 and expr.operator == OP_OR
 
-def is_implies(expr):
-    return expr.is_operator and expr.arity == 2 and expr.operator == OP_IMPLIES
+def is_and(expr: HplExpression) -> bool:
+    return expr.is_operator and expr.arity == 2 and expr.operator.is_and
 
-def is_iff(expr):
-    return expr.is_operator and expr.arity == 2 and expr.operator == OP_IFF
 
-def is_true(expr):
+def is_or(expr: HplExpression) -> bool:
+    return expr.is_operator and expr.arity == 2 and expr.operator.is_or
+
+
+def is_implies(expr: HplExpression) -> bool:
+    return expr.is_operator and expr.arity == 2 and expr.operator.is_implies
+
+
+def is_iff(expr: HplExpression) -> bool:
+    return expr.is_operator and expr.arity == 2 and expr.operator.is_iff
+
+
+def is_true(expr: HplExpression) -> bool:
     return expr.is_value and expr.is_literal and expr.value is True
 
-def is_false(expr):
+
+def is_false(expr: HplExpression) -> bool:
     return expr.is_value and expr.is_literal and expr.value is False
 
-def empty_test(expr):
-    a = HplFunctionCall("len", (expr,))
-    b = HplLiteral("0", 0)
-    return HplBinaryOperator("=", a, b)
 
-def true():
-    return HplLiteral("True", True)
+def empty_test(expr: HplExpression) -> HplBinaryOperator:
+    a = HplFunctionCall('len', (expr,))
+    b = HplLiteral('0', 0)
+    return HplBinaryOperator('=', a, b)
 
-def false():
-    return HplLiteral("False", False)
+
+def true() -> HplLiteral:
+    return HplLiteral('True', True)
+
+
+def false() -> HplLiteral:
+    return HplLiteral('False', False)
