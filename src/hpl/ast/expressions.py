@@ -13,7 +13,7 @@ from attrs import field, frozen
 from attrs.validators import deep_iterable, instance_of
 
 from hpl.ast.base import HplAstObject
-from hpl.errors import HplSanityError, HplTypeError, index_out_of_range, missing_field, type_error_in_expr
+from hpl.errors import HplSanityError, index_out_of_range, missing_field, type_error_in_expr
 from hpl.grammar import (
     ALL_OPERATOR,
     AND_OPERATOR,
@@ -138,7 +138,7 @@ class HplExpression(HplAstObject):
         return self.replace(is_self_reference, other)
 
     def replace_var_reference(self, alias: str, other: 'HplExpression') -> 'HplExpression':
-        test = lambda expr: is_var_reference(expr) and expr.name == alias
+        test = lambda expr: is_var_reference(expr, alias=alias)
         return self.replace(test, other)
 
     def replace(
@@ -495,7 +495,7 @@ class HplQuantifier(HplExpression):
     condition: HplExpression = field(converter=_convert_quantifier_condition)
 
     @classmethod
-    def forall(cls, var: str, dom: HplExpression, phi: HplExpression ) -> 'HplQuantifier':
+    def forall(cls, var: str, dom: HplExpression, phi: HplExpression) -> 'HplQuantifier':
         return cls(quantifier=QuantifierType.ALL, variable=var, domain=dom, condition=phi)
 
     @classmethod
@@ -641,6 +641,14 @@ class UnaryOperatorDefinition:
     @property
     def name(self) -> str:
         return self.token
+
+    @property
+    def is_minus(self) -> bool:
+        return self.token == '-'
+
+    @property
+    def is_not(self) -> bool:
+        return self.token == NOT_OPERATOR
 
     def __str__(self) -> str:
         return self.token
@@ -855,6 +863,38 @@ class BinaryOperatorDefinition:
     @property
     def parameters(self) -> Tuple[DataType, DataType]:
         return (self.parameter1, self.parameter2)
+
+    @property
+    def is_plus(self) -> bool:
+        return self.token == '+'
+
+    @property
+    def is_minus(self) -> bool:
+        return self.token == '-'
+
+    @property
+    def is_times(self) -> bool:
+        return self.token == '*'
+
+    @property
+    def is_division(self) -> bool:
+        return self.token == '/'
+
+    @property
+    def is_and(self) -> bool:
+        return self.token == AND_OPERATOR
+
+    @property
+    def is_or(self) -> bool:
+        return self.token == OR_OPERATOR
+
+    @property
+    def is_implies(self) -> bool:
+        return self.token == IMPLIES_OPERATOR
+
+    @property
+    def is_iff(self) -> bool:
+        return self.token == IFF_OPERATOR
 
     def __str__(self) -> str:
         return self.token
@@ -1463,5 +1503,5 @@ def is_self_reference(expr: HplExpression) -> bool:
     return expr.is_value and expr.is_this_msg
 
 
-def is_var_reference(expr: HplExpression) -> bool:
-    return expr.is_value and expr.is_variable
+def is_var_reference(expr: HplExpression, alias: Optional[str] = None) -> bool:
+    return (expr.is_value and expr.is_variable) and (alias is None or expr.name == alias)
