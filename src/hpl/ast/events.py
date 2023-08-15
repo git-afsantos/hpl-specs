@@ -6,7 +6,7 @@
 ###############################################################################
 
 from enum import Enum, auto
-from typing import Iterator, Optional, Set, Tuple
+from typing import Iterator, Mapping, Optional, Set, Tuple
 
 from attrs import field, frozen
 from attrs.validators import instance_of, in_
@@ -52,6 +52,9 @@ class HplEvent(HplAstObject):
         raise NotImplementedError()
 
     def simple_events(self) -> Iterator['HplEvent']:
+        raise NotImplementedError()
+
+    def type_check_references(self, msg_types: Mapping[str, TypeToken]) -> None:
         raise NotImplementedError()
 
 
@@ -125,6 +128,10 @@ class HplSimpleEvent(HplEvent):
     def simple_events(self) -> Iterator[HplEvent]:
         yield self
 
+    def type_check_references(self, msg_types: Mapping[str, TypeToken]) -> None:
+        this_msg = msg_types[self.name]
+        self.predicate.type_check_references(this_msg, variables=msg_types)
+
     def __str__(self) -> str:
         alias = (' as ' + self.alias) if self.alias is not None else ''
         assert self.is_publish, f'event_type: {self.event_type}'
@@ -181,6 +188,10 @@ class HplEventDisjunction(HplEvent):
             yield event
         for event in self.event2.simple_events():
             yield event
+
+    def type_check_references(self, msg_types: Mapping[str, TypeToken]) -> None:
+        self.event1.type_check_references(msg_types)
+        self.event2.type_check_references(msg_types)
 
     def __str__(self) -> str:
         return f'({self.event1} or {self.event2})'
