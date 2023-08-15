@@ -13,27 +13,27 @@ from typing import Any
 
 
 def type_error_in_expr(error: TypeError, expr: Any) -> TypeError:
-    return TypeError(f'type error in expression «{expr}»: {error}')
+    return TypeError(f'type error in expression «{expr}»: {error!r}')
 
 
-def invalid_type(expected: str, found: str, obj: Any) -> TypeError:
-    return TypeError(f'expected type {expected} but found {found} in «{obj}»')
+def invalid_type(expected: str, found: Any) -> TypeError:
+    return TypeError(f'expected type {expected} but found {found!r}')
 
 
 def missing_field(type_token: Any, field: str, obj: Any) -> TypeError:
-    return TypeError(f"type '{type_token}' has no field '{field}' in «{obj}»")
+    return TypeError(f"type '{type_token}' has no field '{field}' in «{obj!r}»")
 
 
 def invalid_attr(key: str, expected: Any, found: Any, obj: Any) -> ValueError:
-    return ValueError(f'expected {key}={expected!r} but got {found!r} in «{obj}»')
+    return ValueError(f'expected {key}={expected!r} but got {found!r} in «{obj!r}»')
 
 
 def expected_not_none(key: str, obj: Any) -> ValueError:
-    return ValueError(f'expected {key} != None in «{obj}»')
+    return ValueError(f'expected {key} != None in «{obj!r}»')
 
 
 def index_out_of_range(t_array: Any, idx: int, obj: Any) -> IndexError:
-    return IndexError(f"index {idx} out of range in type '{t_array}' in «{obj}»")
+    return IndexError(f"index {idx} out of range in type '{t_array}' in «{obj!r}»")
 
 
 ###############################################################################
