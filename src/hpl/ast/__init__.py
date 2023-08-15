@@ -41,6 +41,7 @@ from hpl.ast.predicates import (
     HplPredicateExpression,
     HplVacuousTruth,
 )
+from hpl.ast.properties import HplPattern, HplProperty, HplScope, PatternType, ScopeType
 from hpl.ast.specs import HplSpecification
 from hpl.types import (
     ARRAY_TYPE,
