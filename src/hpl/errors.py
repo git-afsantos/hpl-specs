@@ -50,6 +50,14 @@ class HplSanityError(Exception):
     def duplicate_event(cls, name: str, obj) -> 'HplSanityError':
         return cls(f"channel '{name}' appears multiple times in «{obj}»")
 
+    @classmethod
+    def ref_undefined_event(cls, name: str, obj) -> 'HplSanityError':
+        return cls(f"reference to undefined event '{name}' in «{obj}»")
+
+    @classmethod
+    def already_defined(cls, name: str, obj) -> 'HplSanityError':
+        return cls(f"multiple definitions of '{name}' in «{obj}»")
+
 
 class HplSyntaxError(Exception):
     @classmethod
