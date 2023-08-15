@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
 
@@ -7,21 +5,25 @@
 # Imports
 ###############################################################################
 
+from enum import Enum
 import math
+from typing import Tuple
 
+from attrs import frozen
+from hpl.ast.base import HplAstObject
+from hpl.ast.expressions import HplExpression
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedCharacters, UnexpectedToken
 
-from .ast import (
+from hpl.ast import (
     HplSpecification, HplProperty, HplScope, HplPattern, HplSimpleEvent,
     HplPredicate, HplVacuousTruth, HplQuantifier,
     HplUnaryOperator, HplBinaryOperator, HplSet, HplRange, HplLiteral,
     HplVarReference, HplFunctionCall, HplFieldAccess, HplArrayAccess,
     HplThisMessage, HplEventDisjunction
 )
-from .grammar import PREDICATE_GRAMMAR, HPL_GRAMMAR
-from .errors import HplSyntaxError
-
+from hpl.grammar import PREDICATE_GRAMMAR, HPL_GRAMMAR
+from hpl.errors import HplSyntaxError
 
 ###############################################################################
 # Constants
@@ -31,9 +33,17 @@ INF = float("inf")
 NAN = float("nan")
 
 
+class NumberConstants(Enum):
+    PI = math.pi
+    INF = INF
+    NAN = NAN
+    E = math.e
+
+
 ###############################################################################
 # Transformer
 ###############################################################################
+
 
 class PropertyTransformer(Transformer):
     def hpl_file(self, children):
@@ -205,92 +215,85 @@ class PropertyTransformer(Transformer):
             return HplBinaryOperator(op, lhs, rhs)
         return children[0] # len(children) == 1
 
-    def negative_number(self, children):
+    def negative_number(self, children: Tuple[str, HplExpression]) -> HplUnaryOperator:
         op, n = children
         return HplUnaryOperator(op, n)
 
-    _CONSTANTS = {
-        "PI": math.pi,
-        "INF": INF,
-        "NAN": NAN,
-        "E": math.e,
-    }
-
-    def number_constant(self, children):
+    def number_constant(self, children: Tuple[str]) -> HplLiteral:
         c = children[0]
-        return HplLiteral(c, self._CONSTANTS[c])
+        return HplLiteral(c, NumberConstants[c])
 
-    def enum_literal(self, values):
+    def enum_literal(self, values: Tuple[HplExpression]) -> HplSet:
         return HplSet(values)
 
-    def range_literal(self, children):
+    def range_literal(self, children: Tuple[str, HplExpression, HplExpression, str]) -> HplRange:
         lr, lb, ub, rr = children
         exc_min = lr.startswith("!")
         exc_max = rr.endswith("!")
         return HplRange(lb, ub, exc_min=exc_min, exc_max=exc_max)
 
-    def variable(self, children):
+    def variable(self, children: Tuple[str]) -> HplVarReference:
         token = children[0]
         return HplVarReference(token)
 
-    def own_field(self, children):
+    def own_field(self, children: Tuple[str]) -> HplFieldAccess:
         token = children[0]
         return HplFieldAccess(HplThisMessage(), token)
 
-    def field_access(self, children):
+    def field_access(self, children: Tuple[HplExpression, str]) -> HplFieldAccess:
         ref, token = children
         return HplFieldAccess(ref, token)
 
-    def array_access(self, children):
+    def array_access(self, children: Tuple[HplExpression, HplExpression]) -> HplArrayAccess:
         ref, index = children
         return HplArrayAccess(ref, index)
 
-    def frequency(self, children):
+    def frequency(self, children: Tuple[str, str]) -> float:
         n, unit = children
         n = float(n)
-        assert unit == "hz"
-        n = 1.0 / n # seconds
+        assert unit == 'hz'
+        n = 1.0 / n  # seconds
         return n
 
-    def time_amount(self, children):
+    def time_amount(self, children: Tuple[str, str]) -> float:
         n, unit = children
         n = float(n)
-        if unit == "ms":
+        if unit == 'ms':
             n = n / 1000.0
         else:
-            assert unit == "s"
+            assert unit == 's'
         return n
 
-    def boolean(self, children):
+    def boolean(self, children: Tuple[str]) -> HplLiteral:
         b = children[0]
-        if b == "True":
+        if b == 'True':
             return HplLiteral(b, True)
-        assert b == "False"
+        assert b == 'False'
         return HplLiteral(b, False)
 
-    def string(self, children):
+    def string(self, children: Tuple[str]) -> HplLiteral:
         s = children[0]
         return HplLiteral(s, s)
 
-    def number(self, children):
+    def number(self, children: Tuple[str]) -> HplLiteral:
         n = children[0]
         try:
             return HplLiteral(n, int(n))
         except ValueError as e:
             return HplLiteral(n, float(n))
 
-    def signed_number(self, children):
+    def signed_number(self, children: Tuple[str]) -> HplLiteral:
         n = children[0]
         try:
             return HplLiteral(n, int(n))
         except ValueError as e:
             return HplLiteral(n, float(n))
 
-    def int_literal(self, children):
+    def int_literal(self, children: Tuple[str]) -> HplLiteral:
         n = children[0]
         return HplLiteral(n, int(n))
 
-    def ros_name(self, children):
+    def channel_name(self, children: Tuple[str]) -> str:
         n = children[0]
         return n
 
@@ -299,47 +302,65 @@ class PropertyTransformer(Transformer):
 # HPL Parser
 ###############################################################################
 
-class HplParser(object):
-    __slots__ = ("_lark",)
 
-    def __init__(self, grammar, start="hpl_file", debug=False):
-        self._lark = Lark(grammar, parser="lalr", start=start,
-                          transformer=PropertyTransformer(), debug=debug)
+@frozen
+class HplParser:
+    _lark: Lark
 
-    def parse(self, text):
+    @classmethod
+    def from_grammar(
+        cls,
+        grammar: str,
+        start: str = 'hpl_file',
+        *,
+        debug: bool = False,
+    ) -> 'HplParser':
+        return cls(Lark(
+            grammar,
+            parser='lalr',
+            start=start,
+            transformer=PropertyTransformer(),
+            debug=debug,
+        ))
+
+    def parse(self, text: str) -> HplAstObject:
         try:
             return self._lark.parse(text)
         except (UnexpectedToken, UnexpectedCharacters, SyntaxError) as e:
             raise HplSyntaxError.from_lark(e)
 
     @classmethod
-    def specification_parser(cls, debug=False):
-        return cls(HPL_GRAMMAR, start="hpl_file", debug=debug)
+    def specification_parser(cls, *, debug: bool = False) -> 'HplParser':
+        return cls.from_grammar(HPL_GRAMMAR, start='hpl_file', debug=debug)
 
     @classmethod
-    def property_parser(cls, debug=False):
-        return cls(HPL_GRAMMAR, start="hpl_property", debug=debug)
+    def property_parser(cls, *, debug: bool = False) -> 'HplParser':
+        return cls.from_grammar(HPL_GRAMMAR, start='hpl_property', debug=debug)
 
     @classmethod
-    def predicate_parser(cls, debug=False):
-        return cls(PREDICATE_GRAMMAR, start="top_level_condition", debug=debug)
+    def predicate_parser(cls, *, debug: bool = False) -> 'HplParser':
+        return cls.from_grammar(PREDICATE_GRAMMAR, start='top_level_condition', debug=debug)
 
 
-def specification_parser(debug=False):
+def specification_parser(debug: bool = False) -> HplParser:
     return HplParser.specification_parser(debug=debug)
 
-def property_parser(debug=False):
+
+def property_parser(debug: bool = False) -> HplParser:
     return HplParser.property_parser(debug=debug)
 
-def predicate_parser(debug=False):
+
+def predicate_parser(debug: bool = False) -> HplParser:
     return HplParser.predicate_parser(debug=debug)
 
 
-def parse_specification(hpl_text):
+def parse_specification(hpl_text: str) -> HplSpecification:
     return specification_parser().parse(hpl_text)
 
-def parse_property(hpl_text):
+
+def parse_property(hpl_text: str) -> HplProperty:
     return property_parser().parse(hpl_text)
 
-def parse_predicate(hpl_text):
+
+def parse_predicate(hpl_text: str) -> HplPredicate:
     return predicate_parser().parse(hpl_text)
