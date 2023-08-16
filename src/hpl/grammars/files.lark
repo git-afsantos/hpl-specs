@@ -3,4 +3,4 @@
 
 hpl_file: _list_of_properties
 
-_list_of_properties: [_list_of_properties] hpl_property
+_list_of_properties: _list_of_properties? hpl_property
