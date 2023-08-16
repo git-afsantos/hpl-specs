@@ -10,7 +10,7 @@ import math
 from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 from attrs import frozen
-from hpl.ast.predicates import HplPredicateExpression, predicate_from_expression
+from hpl.ast.predicates import predicate_from_expression
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedCharacters, UnexpectedToken
 from lark.visitors import v_args
@@ -32,8 +32,8 @@ from hpl.errors import HplSyntaxError
 # Constants
 ###############################################################################
 
-INF = float("inf")
-NAN = float("nan")
+INF = float('inf')
+NAN = float('nan')
 
 
 class NumberConstants(Enum):
