@@ -20,7 +20,7 @@ negation: NOT_OPERATOR _logic_expr
 
 quantification: QUANT_OPERATOR CNAME "in" _atomic_value ":" _logic_expr
 
-atomic_condition: expr (RELATIONAmL_OPERATOR expr)?
+atomic_condition: expr (RELATIONAL_OPERATOR expr)?
 
 expr: (expr ADD_OPERATOR)? term
 
@@ -217,7 +217,7 @@ negation: NOT_OPERATOR _logic_expr
 
 quantification: QUANT_OPERATOR CNAME "in" _atomic_value ":" _logic_expr
 
-atomic_condition: expr (RELATIONAmL_OPERATOR expr)?
+atomic_condition: expr (RELATIONAL_OPERATOR expr)?
 
 expr: (expr ADD_OPERATOR)? term
 
