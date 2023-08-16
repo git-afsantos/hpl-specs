@@ -7,7 +7,7 @@
 
 from typing import Any, Callable, Final, Iterable, List, Mapping, Optional, Set, Tuple, Type, Union
 
-from enum import Enum, unique
+from enum import Enum
 
 from attrs import field, frozen
 from attrs.validators import deep_iterable, instance_of
@@ -369,6 +369,13 @@ class HplLiteral(HplAtomicValue):
     token: str
     value: Union[bool, int, float, str] = field(validator=instance_of((bool, int, float, str)))
 
+    def __attrs_post_init__(self):
+        if self.value is True or self.value is False:
+            object.__setattr__(self, 'data_type', DataType.BOOL)
+        if isinstance(self.value, str):
+            object.__setattr__(self, 'data_type', DataType.STRING)
+        object.__setattr__(self, 'data_type', DataType.NUMBER)
+
     @classmethod
     def true(cls) -> 'HplLiteral':
         return cls(token='True', value=True)
@@ -379,11 +386,7 @@ class HplLiteral(HplAtomicValue):
 
     @property
     def default_data_type(self) -> DataType:
-        if self.value is True or self.value is False:
-            return DataType.BOOL
-        if isinstance(self.value, str):
-            return DataType.STRING
-        return DataType.NUMBER
+        return DataType.PRIMITIVE
 
     @property
     def is_literal(self) -> bool:
@@ -654,7 +657,6 @@ class UnaryOperatorDefinition:
         return self.token
 
 
-@unique
 class BuiltinUnaryOperator(Enum):
     '''Set of built-in operators.'''
 
@@ -900,7 +902,6 @@ class BinaryOperatorDefinition:
         return self.token
 
 
-@unique
 class BuiltinBinaryOperator(Enum):
     '''Set of supported operators.'''
 
@@ -1249,7 +1250,6 @@ class FunctionDefinition:
         return cls('yaw', (sig1, sig2))
 
 
-@unique
 class BuiltinFunction(Enum):
     '''Set of built-in functions.'''
 
