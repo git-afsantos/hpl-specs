@@ -28,6 +28,7 @@ from hpl.ast.predicates import (
     HplPredicate,
     HplPredicateExpression,
     HplVacuousTruth,
+    predicate_from_expression,
 )
 from hpl.errors import invalid_type
 
@@ -209,15 +210,6 @@ def _split_negation(neg: HplUnaryOperator, alias: str) -> Tuple[HplExpression, H
         # cannot split into two parts
         return (true(), neg)
     raise TypeError(f'unknown expression type: {expr!r}')
-
-
-def predicate_from_expression(expr: HplExpression) -> HplPredicate:
-    assert expr.can_be_bool
-    if expr.is_value and expr.is_literal:
-        assert isinstance(expr, HplLiteral)
-        assert isinstance(expr.value, bool)
-        return HplVacuousTruth() if expr.value else HplContradiction()
-    return HplPredicateExpression(expr)
 
 
 ###############################################################################

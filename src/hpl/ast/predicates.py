@@ -11,7 +11,7 @@ from attrs import field, frozen
 from attrs.validators import instance_of
 
 from hpl.ast.base import HplAstObject
-from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplExpression, Not
+from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplExpression, HplLiteral, Not
 from hpl.errors import HplSanityError
 from hpl.types import TypeToken
 
@@ -250,3 +250,17 @@ class HplContradiction(HplPredicate):
 
     def __str__(self) -> str:
         return '{ False }'
+
+
+###############################################################################
+# Helper Functions
+###############################################################################
+
+
+def predicate_from_expression(expr: HplExpression) -> HplPredicate:
+    assert expr.can_be_bool
+    if expr.is_value and expr.is_literal:
+        assert isinstance(expr, HplLiteral)
+        assert isinstance(expr.value, bool)
+        return HplVacuousTruth() if expr.value else HplContradiction()
+    return HplPredicateExpression(expr)
