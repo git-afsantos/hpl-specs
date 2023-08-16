@@ -7,13 +7,13 @@
 
 from enum import Enum
 import math
-from typing import Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 from attrs import frozen
-from hpl.ast.base import HplAstObject
-from hpl.ast.expressions import HplExpression
+from hpl.ast.predicates import HplPredicateExpression, predicate_from_expression
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedCharacters, UnexpectedToken
+from lark.visitors import v_args
 
 from hpl.ast import (
     HplSpecification, HplProperty, HplScope, HplPattern, HplSimpleEvent,
@@ -22,6 +22,9 @@ from hpl.ast import (
     HplVarReference, HplFunctionCall, HplFieldAccess, HplArrayAccess,
     HplThisMessage, HplEventDisjunction
 )
+from hpl.ast.base import HplAstObject
+from hpl.ast.events import HplEvent
+from hpl.ast.expressions import HplExpression
 from hpl.grammar import PREDICATE_GRAMMAR, HPL_GRAMMAR
 from hpl.errors import HplSyntaxError
 
@@ -45,27 +48,30 @@ class NumberConstants(Enum):
 ###############################################################################
 
 
+@v_args(inline=True)
 class PropertyTransformer(Transformer):
-    def hpl_file(self, children):
+    @v_args(inline=False)
+    def hpl_file(self, children: Iterable[HplProperty]) -> HplSpecification:
         return HplSpecification(children)
 
-    def hpl_property(self, children):
-        assert len(children) == 2 or len(children) == 3
-        if len(children) == 3:
-            meta, scope, pattern = children
-        else:
-            meta = {}
-            scope, pattern = children
-        hpl_property = HplProperty(scope, pattern, meta=meta)
-        hpl_property.sanity_check()
-        return hpl_property
+    def hpl_property(
+        self,
+        metadata: Optional[Dict[str, Any]],
+        scope: HplScope,
+        pattern: HplPattern,
+    ) -> HplProperty:
+        if metadata is None:
+            metadata = {}
+        # hpl_property.sanity_check()
+        return HplProperty(scope, pattern, metadata=metadata)
 
-    def metadata(self, children):
-        metadata = {}
+    @v_args(inline=False)
+    def metadata(self, children: Iterable[Tuple[str, Any]]) -> Dict[str, Any]:
+        metadata: Dict[str, Any] = {}
         pid = None
         dup = None
         for key, value in children:
-            if key == "id":
+            if key == 'id':
                 pid = value
             if key in metadata:
                 dup = key
@@ -74,78 +80,48 @@ class PropertyTransformer(Transformer):
             raise HplSyntaxError.duplicate_metadata(dup, pid=pid)
         return metadata
 
-    def metadata_id(self, children):
-        assert len(children) == 1
-        data = children[0]
-        return ("id", data)
+    def metadata_id(self, data: str) -> Tuple[str, str]:
+        return ('id', data)
 
-    def metadata_title(self, children):
-        assert len(children) == 1
-        data = children[0]
-        return ("title", data)
+    def metadata_title(self, data: str) -> Tuple[str, str]:
+        return ('title', data)
 
-    def metadata_desc(self, children):
-        assert len(children) == 1
-        data = children[0]
-        return ("description", data)
+    def metadata_desc(self, data: str) -> Tuple[str, str]:
+        return ('description', data)
 
-    def global_scope(self, children):
+    @v_args(inline=False)
+    def global_scope(self, children: Iterable[Any]) -> HplScope:
         assert not children
         return HplScope.globally()
 
-    def after_until(self, children):
-        assert len(children) == 1 or len(children) == 2
-        p = children[0]
-        if len(children) == 2:
-            return HplScope.after_until(p, children[1])
-        return HplScope.after(p)
+    def after_until(self, p: HplEvent, q: Optional[HplEvent]) -> HplScope:
+        return HplScope.after(p) if q is None else HplScope.after_until(p, q)
 
-    def until(self, children):
-        event = children[0]
+    def until(self, event: HplEvent) -> HplScope:
         return HplScope.until(event)
 
-    def activator(self, children):
-        event = children[0]
-        return event
-
-    def terminator(self, children):
-        event = children[0]
-        return event
-
-    def existence(self, children):
-        assert len(children) == 1 or len(children) == 2
-        b = children[0]
-        max_time = INF if len(children) == 1 else children[1]
+    def existence(self, b: HplEvent, t: Optional[float]) -> HplPattern:
+        max_time = INF if t is None else t
         return HplPattern.existence(b, max_time=max_time)
 
-    def absence(self, children):
-        assert len(children) == 1 or len(children) == 2
-        b = children[0]
-        max_time = INF if len(children) == 1 else children[1]
+    def absence(self, b: HplEvent, t: Optional[float]) -> HplPattern:
+        max_time = INF if t is None else t
         return HplPattern.absence(b, max_time=max_time)
 
-    def response(self, children):
-        assert len(children) == 2 or len(children) == 3
-        a = children[0]
-        b = children[1]
-        max_time = INF if len(children) == 2 else children[2]
+    def response(self, a: HplEvent, b: HplEvent, t: Optional[float]) -> HplPattern:
+        max_time = INF if t is None else t
         return HplPattern.response(a, b, max_time=max_time)
 
-    def prevention(self, children):
-        assert len(children) == 2 or len(children) == 3
-        a = children[0]
-        b = children[1]
-        max_time = INF if len(children) == 2 else children[2]
+    def prevention(self, a: HplEvent, b: HplEvent, t: Optional[float]) -> HplPattern:
+        max_time = INF if t is None else t
         return HplPattern.prevention(a, b, max_time=max_time)
 
-    def requirement(self, children):
-        assert len(children) == 2 or len(children) == 3
-        b = children[0]
-        a = children[1]
-        max_time = INF if len(children) == 2 else children[2]
+    def requirement(self, b: HplEvent, a: HplEvent, t: Optional[float]) -> HplPattern:
+        max_time = INF if t is None else t
         return HplPattern.requirement(b, a, max_time=max_time)
 
-    def event_disjunction(self, children):
+    @v_args(inline=False)
+    def event_disjunction(self, children: Iterable[HplEvent]) -> HplEventDisjunction:
         assert len(children) >= 2
         if len(children) == 2:
             return HplEventDisjunction(children[0], children[1])
@@ -153,149 +129,139 @@ class PropertyTransformer(Transformer):
             return HplEventDisjunction(
                 children[0], self.event_disjunction(children[1:]))
 
-    def event(self, children):
-        assert len(children) == 1 or len(children) == 2
-        ros_name, alias = children[0]
-        phi = HplVacuousTruth() if len(children) == 1 else children[1]
-        return HplSimpleEvent.publish(ros_name, alias=alias, predicate=phi)
+    def event(self, msg: Tuple[str, Optional[str]], phi: Optional[HplPredicate]) -> HplSimpleEvent:
+        name, alias = msg
+        phi = HplVacuousTruth() if phi is None else phi
+        return HplSimpleEvent.publish(name, alias=alias, predicate=phi)
 
-    def message(self, children):
-        alias = None if len(children) == 1 else children[1]
-        return (children[0], alias)
+    def message(self, name: str, alias: Optional[str]) -> Tuple[str, Optional[str]]:
+        return (name, alias)
 
-    def predicate(self, children):
-        expr = children[0]
-        return HplPredicate(expr)
+    def predicate(self, expr: HplExpression) -> HplPredicate:
+        return predicate_from_expression(expr)
 
-    def top_level_condition(self, children):
-        expr = children[0]
-        # TODO remove, just for debugging
-        phi = HplPredicate(expr)
+    def top_level_condition(self, expr: HplExpression) -> HplExpression:
         return expr
 
-    def condition(self, children):
+    @v_args(inline=False)
+    def condition(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
         return self._lr_binop(children)
 
-    def disjunction(self, children):
+    @v_args(inline=False)
+    def disjunction(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
         return self._lr_binop(children)
 
-    def conjunction(self, children):
+    @v_args(inline=False)
+    def conjunction(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
         return self._lr_binop(children)
 
-    def negation(self, children):
-        op, phi = children
+    def negation(self, op: str, phi: HplExpression) -> HplUnaryOperator:
         return HplUnaryOperator(op, phi)
 
-    def quantification(self, children):
-        qt, var, dom, phi = children
-        return HplQuantifier(qt, var, dom, phi)
+    def quantification(
+        self,
+        quantifier: str,
+        variable: str,
+        domain: HplExpression,
+        condition: HplExpression,
+    ) -> HplQuantifier:
+        return HplQuantifier(quantifier, variable, domain, condition)
 
-    def atomic_condition(self, children):
+    @v_args(inline=False)
+    def atomic_condition(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
         return self._lr_binop(children)
 
-    def function_call(self, children):
-        fun, arg = children
+    def function_call(self, fun: str, arg: HplExpression) -> HplExpression:
         return HplFunctionCall(fun, (arg,))
 
-    def expr(self, children):
+    @v_args(inline=False)
+    def expr(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
         return self._lr_binop(children)
 
-    def term(self, children):
+    @v_args(inline=False)
+    def term(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
         return self._lr_binop(children)
 
-    def factor(self, children):
+    @v_args(inline=False)
+    def factor(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
         return self._lr_binop(children)
 
-    def _lr_binop(self, children):
+    def _lr_binop(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
         assert len(children) == 1 or len(children) == 3
         if len(children) == 3:
             op = children[1]
             lhs = children[0]
             rhs = children[2]
             return HplBinaryOperator(op, lhs, rhs)
-        return children[0] # len(children) == 1
+        return children[0]  # len(children) == 1
 
-    def negative_number(self, children: Tuple[str, HplExpression]) -> HplUnaryOperator:
-        op, n = children
+    def negative_number(self, op: str, n: HplExpression) -> HplUnaryOperator:
         return HplUnaryOperator(op, n)
 
-    def number_constant(self, children: Tuple[str]) -> HplLiteral:
-        c = children[0]
-        return HplLiteral(c, NumberConstants[c])
+    def number_constant(self, token: str) -> HplLiteral:
+        return HplLiteral(token, NumberConstants[token])
 
-    def enum_literal(self, values: Tuple[HplExpression]) -> HplSet:
+    @v_args(inline=False)
+    def enum_literal(self, values: Iterable[HplExpression]) -> HplSet:
         return HplSet(values)
 
-    def range_literal(self, children: Tuple[str, HplExpression, HplExpression, str]) -> HplRange:
-        lr, lb, ub, rr = children
-        exc_min = lr.startswith("!")
-        exc_max = rr.endswith("!")
+    def range_literal(self, lr: str, lb: HplExpression, ub: HplExpression, rr: str) -> HplRange:
+        exc_min = lr.startswith('!')
+        exc_max = rr.endswith('!')
         return HplRange(lb, ub, exc_min=exc_min, exc_max=exc_max)
 
-    def variable(self, children: Tuple[str]) -> HplVarReference:
-        token = children[0]
+    def variable(self, token: str) -> HplVarReference:
         return HplVarReference(token)
 
-    def own_field(self, children: Tuple[str]) -> HplFieldAccess:
-        token = children[0]
+    def own_field(self, token: str) -> HplFieldAccess:
         return HplFieldAccess(HplThisMessage(), token)
 
-    def field_access(self, children: Tuple[HplExpression, str]) -> HplFieldAccess:
-        ref, token = children
+    def field_access(self, ref: HplExpression, token: str) -> HplFieldAccess:
         return HplFieldAccess(ref, token)
 
-    def array_access(self, children: Tuple[HplExpression, HplExpression]) -> HplArrayAccess:
-        ref, index = children
+    def array_access(self, ref: HplExpression, index: HplExpression) -> HplArrayAccess:
         return HplArrayAccess(ref, index)
 
-    def frequency(self, children: Tuple[str, str]) -> float:
-        n, unit = children
-        n = float(n)
+    def frequency(self, num: str, unit: str) -> float:
+        n = float(num)
         assert unit == 'hz'
         n = 1.0 / n  # seconds
         return n
 
-    def time_amount(self, children: Tuple[str, str]) -> float:
-        n, unit = children
-        n = float(n)
+    def time_amount(self, num: str, unit: str) -> float:
+        n = float(num)
         if unit == 'ms':
             n = n / 1000.0
         else:
             assert unit == 's'
         return n
 
-    def boolean(self, children: Tuple[str]) -> HplLiteral:
-        b = children[0]
-        if b == 'True':
-            return HplLiteral(b, True)
-        assert b == 'False'
-        return HplLiteral(b, False)
+    def boolean(self, token: str) -> HplLiteral:
+        if token == 'True':
+            return HplLiteral(token, True)
+        assert token == 'False'
+        return HplLiteral(token, False)
 
-    def string(self, children: Tuple[str]) -> HplLiteral:
-        s = children[0]
-        return HplLiteral(s, s)
+    def string(self, token: str) -> HplLiteral:
+        return HplLiteral(token, token)
 
-    def number(self, children: Tuple[str]) -> HplLiteral:
-        n = children[0]
+    def number(self, token: str) -> HplLiteral:
         try:
-            return HplLiteral(n, int(n))
+            return HplLiteral(token, int(token))
         except ValueError as e:
-            return HplLiteral(n, float(n))
+            return HplLiteral(token, float(token))
 
-    def signed_number(self, children: Tuple[str]) -> HplLiteral:
-        n = children[0]
+    def signed_number(self, token: str) -> HplLiteral:
         try:
-            return HplLiteral(n, int(n))
+            return HplLiteral(token, int(token))
         except ValueError as e:
-            return HplLiteral(n, float(n))
+            return HplLiteral(token, float(token))
 
-    def int_literal(self, children: Tuple[str]) -> HplLiteral:
-        n = children[0]
-        return HplLiteral(n, int(n))
+    def int_literal(self, token: str) -> HplLiteral:
+        return HplLiteral(token, int(token))
 
-    def channel_name(self, children: Tuple[str]) -> str:
-        n = children[0]
-        return n
+    def channel_name(self, name: str) -> str:
+        return name
 
 
 ###############################################################################
@@ -320,6 +286,7 @@ class HplParser:
             parser='lalr',
             start=start,
             transformer=PropertyTransformer(),
+            maybe_placeholders=True,
             debug=debug,
         ))
 
