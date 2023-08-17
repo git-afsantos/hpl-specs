@@ -221,7 +221,7 @@ class PropertyTransformer(Transformer):
         return HplUnaryOperator(op, n.cast(op.parameter))
 
     def number_constant(self, token: str) -> HplLiteral:
-        return HplLiteral(token, NumberConstants[token])
+        return HplLiteral(token, NumberConstants[token].value)
 
     @v_args(inline=False)
     def enum_literal(self, values: Iterable[HplExpression]) -> HplSet:
