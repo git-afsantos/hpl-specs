@@ -25,6 +25,7 @@ GOOD_PREDICATES = [
     "f.int in [0 to 10]!",
     "f.int in ![0 to len(array)]!",
     "not array[0] in {0, 1, 2}",
+    "a[1][2]",
 ]
 
 
