@@ -11,6 +11,7 @@ from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 from attrs import frozen
 from hpl.ast.predicates import predicate_from_expression
+from hpl.types import ARRAY_TYPE, MESSAGE_TYPE, NUMBER_TYPE, DataType
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedCharacters, UnexpectedToken
 from lark.visitors import v_args
@@ -24,7 +25,7 @@ from hpl.ast import (
 )
 from hpl.ast.base import HplAstObject
 from hpl.ast.events import HplEvent
-from hpl.ast.expressions import HplExpression
+from hpl.ast.expressions import HplExpression, _convert_binary_operator, _convert_unary_operator
 from hpl.grammar import PREDICATE_GRAMMAR, HPL_GRAMMAR
 from hpl.errors import HplSyntaxError
 
@@ -160,8 +161,9 @@ class PropertyTransformer(Transformer):
     def conjunction(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
         return self._lr_binop(children)
 
-    def negation(self, op: str, phi: HplExpression) -> HplUnaryOperator:
-        return HplUnaryOperator(op, phi)
+    def negation(self, token: str, phi: HplExpression) -> HplUnaryOperator:
+        op = _convert_unary_operator(token)
+        return HplUnaryOperator(op, phi.cast(op.parameter))
 
     def quantification(
         self,
@@ -194,14 +196,15 @@ class PropertyTransformer(Transformer):
     def _lr_binop(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
         assert len(children) == 1 or len(children) == 3
         if len(children) == 3:
-            op = children[1]
-            lhs = children[0]
-            rhs = children[2]
+            op = _convert_binary_operator(children[1])
+            lhs = children[0].cast(op.parameter1)
+            rhs = children[2].cast(op.parameter2)
             return HplBinaryOperator(op, lhs, rhs)
         return children[0]  # len(children) == 1
 
-    def negative_number(self, op: str, n: HplExpression) -> HplUnaryOperator:
-        return HplUnaryOperator(op, n)
+    def negative_number(self, token: str, n: HplExpression) -> HplUnaryOperator:
+        op = _convert_unary_operator(token)
+        return HplUnaryOperator(op, n.cast(op.parameter))
 
     def number_constant(self, token: str) -> HplLiteral:
         return HplLiteral(token, NumberConstants[token])
@@ -222,10 +225,10 @@ class PropertyTransformer(Transformer):
         return HplFieldAccess(HplThisMessage(), token)
 
     def field_access(self, ref: HplExpression, token: str) -> HplFieldAccess:
-        return HplFieldAccess(ref, token)
+        return HplFieldAccess(ref.cast(MESSAGE_TYPE), token)
 
     def array_access(self, ref: HplExpression, index: HplExpression) -> HplArrayAccess:
-        return HplArrayAccess(ref, index)
+        return HplArrayAccess(ref.cast(ARRAY_TYPE), index.cast(NUMBER_TYPE))
 
     def frequency(self, num: str, unit: str) -> float:
         n = float(num)
