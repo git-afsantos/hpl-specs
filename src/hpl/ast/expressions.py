@@ -232,9 +232,9 @@ def _convert_set_values(values: Iterable[HplExpression]) -> Tuple[HplExpression]
 
 @frozen
 class HplSet(HplValue):
-    values: Tuple[HplValue] = field(
+    values: Tuple[HplExpression] = field(
         converter=_convert_set_values,
-        validator=deep_iterable(instance_of(HplValue)),
+        validator=deep_iterable(instance_of(HplExpression)),
     )
 
     @property
@@ -249,10 +249,10 @@ class HplSet(HplValue):
     def subtypes(self) -> DataType:
         return DataType.union(value.data_type for value in self.values)
 
-    def to_set(self) -> Set[HplValue]:
+    def to_set(self) -> Set[HplExpression]:
         return set(self.values)
 
-    def children(self) -> Tuple[HplValue]:
+    def children(self) -> Tuple[HplExpression]:
         return self.values
 
     def reshape(
@@ -282,8 +282,8 @@ def _convert_range_bounds(value: HplExpression) -> HplExpression:
 
 @frozen
 class HplRange(HplValue):
-    min_value: HplValue = field(converter=_convert_range_bounds, validator=instance_of(HplValue))
-    max_value: HplValue = field(converter=_convert_range_bounds, validator=instance_of(HplValue))
+    min_value: HplExpression = field(converter=_convert_range_bounds, validator=instance_of(HplExpression))
+    max_value: HplExpression = field(converter=_convert_range_bounds, validator=instance_of(HplExpression))
     exclude_min: bool = False
     exclude_max: bool = False
 
@@ -299,7 +299,7 @@ class HplRange(HplValue):
     def subtypes(self) -> DataType:
         return DataType.NUMBER
 
-    def children(self) -> Tuple[HplValue]:
+    def children(self) -> Tuple[HplExpression]:
         return (self.min_value, self.max_value)
 
     def reshape(
@@ -1290,6 +1290,10 @@ class BuiltinFunction(Enum):
     PITCH = FunctionDefinition.pitch()
     YAW = FunctionDefinition.yaw()
 
+    @property
+    def token(self) -> str:
+        return self.value.name
+
 
 def _convert_function_def(
     fun: Union[str, BuiltinFunction, FunctionDefinition]
@@ -1299,14 +1303,17 @@ def _convert_function_def(
     if isinstance(fun, BuiltinFunction):
         return fun.value
     for member in BuiltinFunction.__members__.values():
-        if member.name == fun:
-            return member
+        if member.token == fun:
+            return member.value
     raise ValueError(f'{fun!r} is not a valid function')
 
 
 @frozen
 class HplFunctionCall(HplExpression):
-    function: FunctionDefinition = field(converter=_convert_function_def)
+    function: FunctionDefinition = field(
+        converter=_convert_function_def,
+        validator=instance_of(FunctionDefinition),
+    )
     arguments: Tuple[HplExpression] = field(converter=tuple)
 
     @arguments.validator
