@@ -282,8 +282,14 @@ def _convert_range_bounds(value: HplExpression) -> HplExpression:
 
 @frozen
 class HplRange(HplValue):
-    min_value: HplExpression = field(converter=_convert_range_bounds, validator=instance_of(HplExpression))
-    max_value: HplExpression = field(converter=_convert_range_bounds, validator=instance_of(HplExpression))
+    min_value: HplExpression = field(
+        converter=_convert_range_bounds,
+        validator=instance_of(HplExpression),
+    )
+    max_value: HplExpression = field(
+        converter=_convert_range_bounds,
+        validator=instance_of(HplExpression),
+    )
     exclude_min: bool = False
     exclude_max: bool = False
 
