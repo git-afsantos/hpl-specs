@@ -92,7 +92,7 @@ class HplSimpleEvent(HplEvent):
 
     @property
     def is_publish(self):
-        return self.event_type == self.PUBLISH
+        return self.event_type is EventType.PUBLISH
 
     @property
     def phi(self) -> HplPredicate:
