@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Changed
 - Modernized tooling and package structure.
 - Improved API in various aspects, with some backward-incompatible changes.
+- AST objects are mostly immutable, with available methods to create mutated copies.
 - Added a number of attribute validators for AST data types.
 
 ## v0.2.3 - 2021-08-27
