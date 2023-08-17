@@ -43,7 +43,7 @@ class HplPredicate(HplAstObject):
     @property
     def condition(self) -> HplExpression:
         raise NotImplementedError()
-    
+
     @property
     def phi(self) -> HplExpression:
         return self.condition

@@ -149,8 +149,7 @@ def _split_quantifier(quant: HplQuantifier, alias: str) -> Tuple[HplExpression, 
 
 
 def _split_operator(
-    op: Union[HplUnaryOperator, HplBinaryOperator],
-    alias: str
+    op: Union[HplUnaryOperator, HplBinaryOperator], alias: str
 ) -> Tuple[HplExpression, HplExpression]:
     if op.arity == 1:
         assert isinstance(op, HplUnaryOperator)

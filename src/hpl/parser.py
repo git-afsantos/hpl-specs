@@ -303,14 +303,16 @@ class HplParser:
         *,
         debug: bool = False,
     ) -> 'HplParser':
-        return cls(Lark(
-            grammar,
-            parser='lalr',
-            start=start,
-            transformer=PropertyTransformer(),
-            maybe_placeholders=True,
-            debug=debug,
-        ))
+        return cls(
+            Lark(
+                grammar,
+                parser='lalr',
+                start=start,
+                transformer=PropertyTransformer(),
+                maybe_placeholders=True,
+                debug=debug,
+            )
+        )
 
     def parse(self, text: str) -> HplAstObject:
         try:

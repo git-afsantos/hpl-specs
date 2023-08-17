@@ -5,11 +5,12 @@
 # Imports
 ###############################################################################
 
-from enum import Enum, auto
 from typing import Final, Iterator, Mapping, Optional, Tuple
 
+from enum import Enum, auto
+
 from attrs import field, frozen
-from attrs.validators import ge, instance_of, in_, optional
+from attrs.validators import ge, in_, instance_of, optional
 
 from hpl.ast.base import HplAstObject
 from hpl.ast.events import HplEvent, HplSimpleEvent
@@ -256,11 +257,7 @@ class HplPattern(HplAstObject):
 
     @classmethod
     def response(
-        cls,
-        trigger: HplEvent,
-        response: HplEvent,
-        min_time: float = 0.0,
-        max_time: float = INF
+        cls, trigger: HplEvent, response: HplEvent, min_time: float = 0.0, max_time: float = INF
     ) -> 'HplPattern':
         return cls(
             PatternType.RESPONSE,

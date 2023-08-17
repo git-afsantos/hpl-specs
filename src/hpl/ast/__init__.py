@@ -6,6 +6,7 @@
 ###############################################################################
 
 from hpl.ast.base import HplAstObject
+from hpl.ast.events import HplEvent, HplEventDisjunction, HplSimpleEvent
 from hpl.ast.expressions import (
     And,
     BuiltinBinaryOperator,
@@ -34,7 +35,6 @@ from hpl.ast.expressions import (
     Or,
     QuantifierType,
 )
-from hpl.ast.events import HplEvent, HplEventDisjunction, HplSimpleEvent
 from hpl.ast.predicates import (
     HplContradiction,
     HplPredicate,
@@ -45,23 +45,23 @@ from hpl.ast.properties import HplPattern, HplProperty, HplScope, PatternType, S
 from hpl.ast.specs import HplSpecification
 from hpl.types import (
     ARRAY_TYPE,
-    BOOLEANS,
     BOOL_TYPE,
-    DataType,
+    BOOLEANS,
     FLOAT32,
     FLOAT64,
+    INT8,
     INT16,
     INT32,
     INT64,
-    INT8,
     MESSAGE_TYPE,
     NUMBER_TYPE,
     SET_TYPE,
-    STRINGS,
     STRING_TYPE,
-    TypeToken,
+    STRINGS,
+    UINT8,
     UINT16,
     UINT32,
     UINT64,
-    UINT8,
+    DataType,
+    TypeToken,
 )

@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from enum import auto, Enum
+from enum import Enum, auto
 
 from attrs import evolve, field, frozen
 
@@ -90,18 +90,16 @@ class HplExpression(HplAstObject):
             raise HplTypeError.in_expr(self, str(e))
 
 
-
-
 ###############################################################################
 # Predicates
 ###############################################################################
+
 
 @frozen
 class HplPredicate(HplAstObject):
     condition: HplExpression
 
-    _DIFF_TYPES = ("multiple occurrences of '{}' with incompatible types: "
-                   "found ({}) and ({})")
+    _DIFF_TYPES = "multiple occurrences of '{}' with incompatible types: " "found ({}) and ({})"
     _NO_REFS = "there are no references to any fields of this message"
 
     def __init__(self, expr):
@@ -172,31 +170,28 @@ class HplPredicate(HplAstObject):
             t = rostype
         else:
             if expr.name not in aliases:
-                raise HplSanityError(
-                    "undefined message alias: '{}'".format(expr.name))
+                raise HplSanityError("undefined message alias: '{}'".format(expr.name))
             t = aliases[expr.name]
         assert t.is_message
         expr.ros_type = t
         while stack:
             expr = stack.pop()
             if expr.is_field:
-                if not (t.is_message or expr.field in t.fields
-                        or expr.field in t.constants):
+                if not (t.is_message or expr.field in t.fields or expr.field in t.constants):
                     raise HplTypeError.ros_field(t, expr.field, expr)
                 if expr.field in t.fields:
                     t = t.fields[expr.field]
                 else:
-                    assert expr.field in t.constants, \
-                        "'{}' not in {} or {}".format(
-                            expr.field, t.fields, t.constants)
+                    assert expr.field in t.constants, "'{}' not in {} or {}".format(
+                        expr.field, t.fields, t.constants
+                    )
                     t = t.constants[expr.field].ros_type
             else:
                 assert expr.is_indexed
                 if not t.is_array:
                     raise HplTypeError.ros_array(t, expr)
                 i = expr.index
-                if (i.is_value and i.is_literal
-                        and not t.contains_index(i.value)):
+                if i.is_value and i.is_literal and not t.contains_index(i.value):
                     raise HplTypeError.ros_index(t, expr.index, expr)
                 t = t.type_token
             if t.is_message:
@@ -211,7 +206,6 @@ class HplPredicate(HplAstObject):
             elif t.is_string:
                 accessor._type_check(expr, T_STR)
             expr.ros_type = t
-
 
 
 ###############################################################################
@@ -358,14 +352,14 @@ class NumericType(TypeToken):
 
     @classmethod
     def float32(cls, name: str = 'float32') -> 'NumericType':
-        min_value = -3.3999999521443642E+38
-        max_value = 3.3999999521443642E+38
+        min_value = -3.3999999521443642e38
+        max_value = 3.3999999521443642e38
         return cls(name, min_value=min_value, max_value=max_value)
 
     @classmethod
     def float64(cls, name: str = 'float64') -> 'NumericType':
-        min_value = -1.7E+308
-        max_value = 1.7E+308
+        min_value = -1.7e308
+        max_value = 1.7e308
         return cls(name, min_value=min_value, max_value=max_value)
 
 
@@ -419,4 +413,3 @@ INT64: Final[NumericType] = NumericType.int64()
 FLOAT32: Final[NumericType] = NumericType.float32()
 FLOAT64: Final[NumericType] = NumericType.float64()
 STRINGS: Final[StringType] = StringType('string')
-

@@ -5,11 +5,12 @@
 # Imports
 ###############################################################################
 
-from enum import Enum, auto
 from typing import Iterator, Mapping, Optional, Set, Tuple
 
+from enum import Enum, auto
+
 from attrs import field, frozen
-from attrs.validators import instance_of, in_
+from attrs.validators import in_, instance_of
 
 from hpl.ast.base import HplAstObject
 from hpl.ast.expressions import HplExpression, HplThisMessage
@@ -81,10 +82,7 @@ class HplSimpleEvent(HplEvent):
 
     @classmethod
     def publish(
-        cls,
-        name: str,
-        predicate: Optional[HplPredicate] = None,
-        alias: Optional[str] = None
+        cls, name: str, predicate: Optional[HplPredicate] = None, alias: Optional[str] = None
     ) -> 'HplSimpleEvent':
         if predicate is None:
             predicate = HplVacuousTruth()

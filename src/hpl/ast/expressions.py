@@ -188,6 +188,7 @@ def _type_checker(
         if not isinstance(expr, HplExpression):
             raise TypeError(f'expected expression, got {expr!r}')
         self._type_check(expr, t, force=force)
+
     return validator
 
 
@@ -532,10 +533,12 @@ class HplQuantifier(HplExpression):
             if obj.is_value and obj.is_variable:
                 # assert not obj.is_defined
                 if self.variable == obj.name:
-                    raise HplSanityError((
-                        f"cannot reference quantified variable '{obj.name}'"
-                        f" in the domain of «{self}»"
-                    ))
+                    raise HplSanityError(
+                        (
+                            f"cannot reference quantified variable '{obj.name}'"
+                            f" in the domain of «{self}»"
+                        )
+                    )
 
     @condition.validator
     def _check_condition_is_bool(self, _attribute, condition: HplExpression):
@@ -1233,21 +1236,42 @@ class FunctionDefinition:
     def max(cls) -> 'FunctionDefinition':
         num = DataType.NUMBER
         sig1 = FunctionSignature((DataType.COMPOUND,), num)
-        sig2 = FunctionSignature((num, num,), num, variadic=DataType.NUMBER)
+        sig2 = FunctionSignature(
+            (
+                num,
+                num,
+            ),
+            num,
+            variadic=DataType.NUMBER,
+        )
         return cls('max', (sig1, sig2))
 
     @classmethod
     def min(cls) -> 'FunctionDefinition':
         num = DataType.NUMBER
         sig1 = FunctionSignature((DataType.COMPOUND,), num)
-        sig2 = FunctionSignature((num, num,), num, variadic=DataType.NUMBER)
+        sig2 = FunctionSignature(
+            (
+                num,
+                num,
+            ),
+            num,
+            variadic=DataType.NUMBER,
+        )
         return cls('min', (sig1, sig2))
 
     @classmethod
     def gcd(cls) -> 'FunctionDefinition':
         num = DataType.NUMBER
         sig1 = FunctionSignature((DataType.COMPOUND,), num)
-        sig2 = FunctionSignature((num, num,), num, variadic=DataType.NUMBER)
+        sig2 = FunctionSignature(
+            (
+                num,
+                num,
+            ),
+            num,
+            variadic=DataType.NUMBER,
+        )
         return cls('gcd', (sig1, sig2))
 
     @classmethod

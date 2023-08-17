@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright © 2023 André Santos
 
+
 def reshape(expr: HplExpression, f: Callable[[HplExpression], HplExpression]) -> HplExpression:
     diff = {}
     for attribute in fields(type(expr)):
