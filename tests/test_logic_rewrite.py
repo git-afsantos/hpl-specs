@@ -5,6 +5,11 @@
 # Imports
 ###############################################################################
 
+from hpl.ast.expressions import HplExpression
+from hpl.errors import HplSanityError
+from pytest import raises
+
+from hpl.ast.predicates import HplPredicate
 from hpl.rewrite import (
     is_true, replace_this_with_var, replace_var_with_this, refactor_reference
 )
@@ -67,34 +72,34 @@ REF_WITH_SPLITS = [
 def test_refactor_but_no_references():
     parser = predicate_parser()
     for test_str in NO_REFS:
-        expr = parser.parse(test_str)
-        phi, psi = refactor_reference(expr, "B")
+        predicate: HplPredicate = parser.parse(test_str)
+        phi, psi = refactor_reference(predicate.condition, "B")
         assert phi.is_expression
         assert psi.is_expression
-        assert phi is expr
+        assert phi is predicate.condition
         assert is_true(psi)
 
 
 def test_refactor_references_but_no_splits():
     parser = predicate_parser()
     for test_str in REF_BUT_NO_SPLITS:
-        expr = parser.parse(test_str)
-        phi, psi = refactor_reference(expr, "B")
+        predicate: HplPredicate = parser.parse(test_str)
+        phi, psi = refactor_reference(predicate.condition, "B")
         assert phi.is_expression
         assert psi.is_expression
-        #assert psi is expr
+        # assert psi is predicate.condition
         assert is_true(phi)
 
 
 def test_refactor_references_with_splits():
     parser = predicate_parser()
     for test_str in REF_WITH_SPLITS:
-        expr = parser.parse(test_str)
-        phi, psi = refactor_reference(expr, "B")
+        predicate: HplPredicate = parser.parse(test_str)
+        phi, psi = refactor_reference(predicate.condition, "B")
         assert phi.is_expression
         assert psi.is_expression
-        assert phi != expr
-        assert psi != expr
+        assert phi != predicate.condition
+        assert psi != predicate.condition
         assert not is_true(phi)
         assert not is_true(psi)
 
@@ -102,8 +107,8 @@ def test_refactor_references_with_splits():
 def test_replace_this_msg_but_no_splits():
     parser = predicate_parser()
     for test_str in REF_BUT_NO_SPLITS:
-        expr = parser.parse(test_str)
-        phi, psi = refactor_reference(expr, "B")
+        predicate: HplPredicate = parser.parse(test_str)
+        phi, psi = refactor_reference(predicate.condition, "B")
         assert is_true(phi)
         replace_this_with_var(psi, "A")
         replace_var_with_this(psi, "B")
@@ -112,8 +117,10 @@ def test_replace_this_msg_but_no_splits():
 def test_replace_this_msg_with_splits():
     parser = predicate_parser()
     for test_str in REF_WITH_SPLITS:
-        expr = parser.parse(test_str)
-        phi, psi = refactor_reference(expr, "B")
+        predicate: HplPredicate = parser.parse(test_str)
+        phi, psi = refactor_reference(predicate.condition, "B")
+        assert isinstance(phi, HplExpression)
+        assert isinstance(psi, HplExpression)
         assert not is_true(phi)
         assert not is_true(psi)
         replace_this_with_var(psi, "A")
