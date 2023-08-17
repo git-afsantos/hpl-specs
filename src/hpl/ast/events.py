@@ -145,7 +145,7 @@ class HplEventDisjunction(HplEvent):
 
     def __attrs_post_init__(self):
         names = set()
-        pending = list[self.simple_events()]
+        pending = list(self.simple_events())
         while pending:
             event = pending.pop()
             assert event.is_simple_event
