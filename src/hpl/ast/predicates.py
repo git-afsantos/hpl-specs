@@ -11,7 +11,17 @@ from attrs import field, frozen
 from attrs.validators import instance_of
 
 from hpl.ast.base import HplAstObject
-from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplDataAccess, HplExpression, HplFieldAccess, HplLiteral, HplValue, Not
+from hpl.ast.expressions import (
+    And,
+    BuiltinUnaryOperator,
+    DataType,
+    HplDataAccess,
+    HplExpression,
+    HplFieldAccess,
+    HplLiteral,
+    HplValue,
+    Not,
+)
 from hpl.errors import HplSanityError
 from hpl.types import TypeToken
 
