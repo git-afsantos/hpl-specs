@@ -381,9 +381,10 @@ class HplLiteral(HplAtomicValue):
     def __attrs_post_init__(self):
         if self.value is True or self.value is False:
             object.__setattr__(self, 'data_type', DataType.BOOL)
-        if isinstance(self.value, str):
+        elif isinstance(self.value, str):
             object.__setattr__(self, 'data_type', DataType.STRING)
-        object.__setattr__(self, 'data_type', DataType.NUMBER)
+        else:
+            object.__setattr__(self, 'data_type', DataType.NUMBER)
 
     @classmethod
     def true(cls) -> 'HplLiteral':
