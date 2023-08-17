@@ -123,7 +123,10 @@ class HplExpression(HplAstObject):
             raise type_error_in_expr(e, self)
 
     def external_references(self) -> Set[str]:
-        return set().union(expr.external_references() for expr in self.children())
+        refs = set()
+        for expr in self.children():
+            refs.update(expr.external_references())
+        return refs
 
     def contains_reference(self, alias: str) -> bool:
         return any(expr.contains_reference(alias) for expr in self.children())
