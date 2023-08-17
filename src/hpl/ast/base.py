@@ -60,4 +60,8 @@ class HplAstObject:
         metadata = kwargs.get('metadata')
         if metadata is None:
             metadata = dict(self.metadata)
-        return evolve(self, metadata=metadata, **kwargs)
+        new = evolve(self, **kwargs)
+        assert new.metadata is not self.metadata
+        new.metadata.update(metadata)
+        # object.__setattr__(new, 'metadata', metadata)
+        return new
