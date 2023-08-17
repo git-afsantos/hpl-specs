@@ -139,6 +139,9 @@ class PropertyTransformer(Transformer):
     def message(self, name: str, alias: Optional[str]) -> Tuple[str, Optional[str]]:
         return (name, alias)
 
+    def alias(self, name: str) -> str:
+        return name
+
     def predicate(self, expr: HplExpression) -> HplPredicate:
         return predicate_from_expression(expr)
 
