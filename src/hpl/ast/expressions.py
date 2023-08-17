@@ -116,9 +116,11 @@ class HplExpression(HplAstObject):
         except TypeError as e:
             raise type_error_in_expr(e, self)
 
-    def _type_check(self, expr: 'HplExpression', t: DataType):
+    def _type_check(self, expr: 'HplExpression', t: DataType, *, force: bool = False):
         try:
-            expr.data_type.cast(t)
+            new_type = expr.data_type.cast(t)
+            if force:
+                object.__setattr__(expr, 'data_type', new_type)
         except TypeError as e:
             raise type_error_in_expr(e, self)
 
@@ -177,11 +179,15 @@ class HplExpression(HplAstObject):
                 stack.extend(reversed(obj.children()))
 
 
-def _type_checker(t: DataType) -> Callable[[HplExpression, Any, HplExpression], None]:
+def _type_checker(
+    t: DataType,
+    *,
+    force: bool = False,
+) -> Callable[[HplExpression, Any, HplExpression], None]:
     def validator(self: HplExpression, _attribute: Any, expr: HplExpression):
         if not isinstance(expr, HplExpression):
             raise TypeError(f'expected expression, got {expr!r}')
-        self._type_check(expr, t)
+        self._type_check(expr, t, force=force)
     return validator
 
 
@@ -706,6 +712,13 @@ class HplUnaryOperator(HplExpression):
     )
     operand: HplExpression = field(validator=instance_of(HplExpression))
 
+    @operand.validator
+    def _check_operand(self, _attribute, arg: HplExpression):
+        self._type_check(arg, self.operator.parameter, force=True)
+
+    def __attrs_post_init__(self):
+        object.__setattr__(self, 'data_type', self.operator.result)
+
     @classmethod
     def minus(cls, operand: HplExpression) -> 'HplUnaryOperator':
         return cls(operator=BuiltinUnaryOperator.MINUS, operand=operand)
@@ -713,13 +726,6 @@ class HplUnaryOperator(HplExpression):
     @classmethod
     def negation(cls, operand: HplExpression) -> 'HplUnaryOperator':
         return cls(operator=BuiltinUnaryOperator.NOT, operand=operand)
-
-    @operand.validator
-    def _check_operand(self, _attribute, arg: HplExpression):
-        self._type_check(arg, self.operator.parameter)
-
-    def __attrs_post_init__(self):
-        object.__setattr__(self, 'data_type', self.operator.result)
 
     @property
     def is_operator(self) -> bool:
@@ -969,6 +975,17 @@ class HplBinaryOperator(HplExpression):
     operand1: HplExpression = field(validator=instance_of(HplExpression))
     operand2: HplExpression = field(validator=instance_of(HplExpression))
 
+    @operand1.validator
+    def _check_operand1(self, _attribute, arg: HplExpression):
+        self._type_check(arg, self.operator.parameter1, force=True)
+
+    @operand2.validator
+    def _check_operand2(self, _attribute, arg: HplExpression):
+        self._type_check(arg, self.operator.parameter2, force=True)
+
+    def __attrs_post_init__(self):
+        object.__setattr__(self, 'data_type', self.operator.result)
+
     @classmethod
     def conjunction(cls, a: HplExpression, b: HplExpression) -> 'HplBinaryOperator':
         return cls(operator=BuiltinBinaryOperator.AND, operand1=a, operand2=b)
@@ -984,17 +1001,6 @@ class HplBinaryOperator(HplExpression):
     @classmethod
     def equivalence(cls, a: HplExpression, b: HplExpression) -> 'HplBinaryOperator':
         return cls(operator=BuiltinBinaryOperator.IFF, operand1=a, operand2=b)
-
-    @operand1.validator
-    def _check_operand1(self, _attribute, arg: HplExpression):
-        self._type_check(arg, self.operator.parameter1)
-
-    @operand2.validator
-    def _check_operand2(self, _attribute, arg: HplExpression):
-        self._type_check(arg, self.operator.parameter2)
-
-    def __attrs_post_init__(self):
-        object.__setattr__(self, 'data_type', self.operator.result)
 
     @property
     def is_operator(self) -> bool:
@@ -1427,7 +1433,7 @@ class HplDataAccess(HplExpression):
 
 @frozen
 class HplFieldAccess(HplDataAccess):
-    message: HplExpression = field(validator=_type_checker(DataType.MESSAGE))
+    message: HplExpression = field(validator=_type_checker(DataType.MESSAGE, force=True))
     field: str = field(validator=instance_of(str))
 
     @property
@@ -1478,8 +1484,8 @@ class HplFieldAccess(HplDataAccess):
 
 @frozen
 class HplArrayAccess(HplDataAccess):
-    array: HplExpression = field(validator=_type_checker(DataType.ARRAY))
-    index: HplExpression = field(validator=_type_checker(DataType.NUMBER))
+    array: HplExpression = field(validator=_type_checker(DataType.ARRAY, force=True))
+    index: HplExpression = field(validator=_type_checker(DataType.NUMBER, force=True))
 
     @property
     def is_indexed(self) -> bool:
