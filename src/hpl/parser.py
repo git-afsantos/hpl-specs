@@ -96,7 +96,7 @@ class PropertyTransformer(Transformer):
         assert not children
         return HplScope.globally()
 
-    def after_until(self, p: HplEvent, q: Optional[HplEvent]) -> HplScope:
+    def after_until(self, p: HplEvent, q: Optional[HplEvent] = None) -> HplScope:
         return HplScope.after(p) if q is None else HplScope.after_until(p, q)
 
     def until(self, event: HplEvent) -> HplScope:
@@ -142,8 +142,8 @@ class PropertyTransformer(Transformer):
     def predicate(self, expr: HplExpression) -> HplPredicate:
         return predicate_from_expression(expr)
 
-    def top_level_condition(self, expr: HplExpression) -> HplExpression:
-        return expr
+    def top_level_condition(self, expr: HplExpression) -> HplPredicate:
+        return predicate_from_expression(expr)
 
     @v_args(inline=False)
     def condition(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
