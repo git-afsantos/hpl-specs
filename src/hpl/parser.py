@@ -63,7 +63,9 @@ class PropertyTransformer(Transformer):
         if metadata is None:
             metadata = {}
         # hpl_property.sanity_check()
-        return HplProperty(scope, pattern, metadata=metadata)
+        hpl_property = HplProperty(scope, pattern)
+        hpl_property.metadata.update(metadata)
+        return hpl_property
 
     @v_args(inline=False)
     def metadata(self, children: Iterable[Tuple[str, Any]]) -> Dict[str, Any]:
