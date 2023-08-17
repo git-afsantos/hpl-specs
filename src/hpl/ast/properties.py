@@ -424,7 +424,7 @@ class HplProperty(HplAstObject):
             aliases = self._check_trigger(initial)
             self._check_behaviour(aliases)
         else:
-            assert False, f'unexpected pattern type: {self.pattern!r}'
+            raise TypeError(f'unexpected pattern type: {self.pattern!r}')
         self._check_terminator(initial)
 
     def _check_activator(self) -> Tuple[str]:
@@ -457,7 +457,7 @@ class HplProperty(HplAstObject):
 
     def _check_refs_defined(self, event: HplEvent, available: Tuple[str]) -> None:
         for ref in event.external_references():
-            if not ref in available:
+            if ref not in available:
                 raise HplSanityError.ref_undefined_event(ref, event)
 
     def _check_duplicates(self, aliases: Tuple[str], available: Tuple[str]) -> None:

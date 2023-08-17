@@ -12,7 +12,6 @@ from hpl.ast.expressions import (
     BuiltinBinaryOperator,
     BuiltinFunction,
     BuiltinUnaryOperator,
-    DataType,
     Exists,
     Forall,
     HplArrayAccess,

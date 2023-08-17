@@ -46,7 +46,9 @@ setup(
     author='André Santos',
     author_email='haros.framework@gmail.com',
     license='MIT',
-    keywords='safety, liveness, property specification, specification language, parser, parsing, ast',
+    keywords=(
+        'safety, liveness, property specification, specification language, parser, parsing, ast'
+    ),
     packages=find_packages(where='src'),
     package_dir={'': 'src'},
     include_package_data=True,

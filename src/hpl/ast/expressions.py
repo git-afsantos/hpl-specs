@@ -143,8 +143,7 @@ class HplExpression(HplAstObject):
         return self.replace(is_self_reference, other)
 
     def replace_var_reference(self, alias: str, other: 'HplExpression') -> 'HplExpression':
-        test = lambda expr: is_var_reference(expr, alias=alias)
-        return self.replace(test, other)
+        return self.replace(lambda expr: is_var_reference(expr, alias=alias), other)
 
     def replace(
         self,
@@ -153,8 +152,7 @@ class HplExpression(HplAstObject):
     ) -> 'HplExpression':
         if test(self):
             return other
-        f = lambda expr: other if test(expr) else expr
-        return self.reshape(f, deep=True)
+        return self.reshape(lambda expr: other if test(expr) else expr, deep=True)
 
     def reshape(
         self,
@@ -536,7 +534,7 @@ class HplQuantifier(HplExpression):
                     raise HplSanityError(
                         (
                             f"cannot reference quantified variable '{obj.name}'"
-                            f" in the domain of «{self}»"
+                            f' in the domain of «{self}»'
                         )
                     )
 
@@ -677,7 +675,7 @@ class UnaryOperatorDefinition:
 
 
 class BuiltinUnaryOperator(Enum):
-    '''Set of built-in operators.'''
+    """Set of built-in operators."""
 
     MINUS = UnaryOperatorDefinition.minus()
     NOT = UnaryOperatorDefinition.negation()
@@ -925,7 +923,7 @@ class BinaryOperatorDefinition:
 
 
 class BuiltinBinaryOperator(Enum):
-    '''Set of supported operators.'''
+    """Set of supported operators."""
 
     ADD = BinaryOperatorDefinition.addition()
     SUB = BinaryOperatorDefinition.subtraction()
@@ -1078,7 +1076,7 @@ Iff: Final[Callable[[HplExpression, HplExpression], HplBinaryOperator]] = BinOp.
 
 @frozen
 class FunctionSignature:
-    '''Each of these objects represents a function overload.'''
+    """Each of these objects represents a function overload."""
 
     parameters: Tuple[DataType]
     result: DataType
@@ -1297,7 +1295,7 @@ class FunctionDefinition:
 
 
 class BuiltinFunction(Enum):
-    '''Set of built-in functions.'''
+    """Set of built-in functions."""
 
     ABS = FunctionDefinition.abs()
     BOOL = FunctionDefinition.to_bool()

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
 
-PREDICATE_GRAMMAR = r'''
+PREDICATE_GRAMMAR = r"""
 predicate: "{" condition "}"
 
 top_level_condition: condition
@@ -129,9 +129,9 @@ FREQ_UNIT: "hz"
 %import common.WS
 %ignore WS
 
-'''
+"""
 
-HPL_GRAMMAR = r'''
+HPL_GRAMMAR = r"""
 hpl_file: _list_of_properties
 
 _list_of_properties: _list_of_properties? hpl_property
@@ -326,7 +326,7 @@ FREQ_UNIT: "hz"
 %import common.WS
 %ignore WS
 
-'''
+"""
 
 IN_OPERATOR = 'in'
 NOT_OPERATOR = 'not'
