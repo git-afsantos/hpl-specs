@@ -684,13 +684,16 @@ def _convert_unary_operator(
         return op.value
     for member in BuiltinUnaryOperator.__members__.values():
         if member.token == op:
-            return member
+            return member.value
     raise ValueError(f'{op!r} is not a valid unary operator')
 
 
 @frozen
 class HplUnaryOperator(HplExpression):
-    operator: UnaryOperatorDefinition = field(converter=_convert_unary_operator)
+    operator: UnaryOperatorDefinition = field(
+        converter=_convert_unary_operator,
+        validator=instance_of(UnaryOperatorDefinition),
+    )
     operand: HplExpression = field(validator=instance_of(HplExpression))
 
     @classmethod
@@ -943,13 +946,16 @@ def _convert_binary_operator(
         return op.value
     for member in BuiltinBinaryOperator.__members__.values():
         if member.token == op:
-            return member
+            return member.value
     raise ValueError(f'{op!r} is not a valid binary operator')
 
 
 @frozen
 class HplBinaryOperator(HplExpression):
-    operator: BinaryOperatorDefinition = field(converter=_convert_binary_operator)
+    operator: BinaryOperatorDefinition = field(
+        converter=_convert_binary_operator,
+        validator=instance_of(BinaryOperatorDefinition),
+    )
     operand1: HplExpression = field(validator=instance_of(HplExpression))
     operand2: HplExpression = field(validator=instance_of(HplExpression))
 
