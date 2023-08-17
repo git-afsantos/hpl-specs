@@ -89,7 +89,7 @@ def _refactor_ref_pred(phi: HplPredicate, alias: str) -> Tuple[HplPredicate, Hpl
     if phi.is_vacuous:
         return (phi, HplVacuousTruth())
     expr1, expr2 = _refactor_ref_expr(phi.condition, alias)
-    return tuple(predicate_from_expression(expr1), predicate_from_expression(expr2))
+    return (predicate_from_expression(expr1), predicate_from_expression(expr2))
 
 
 def _refactor_ref_expr(expr: HplExpression, alias: str) -> Tuple[HplExpression, HplExpression]:
