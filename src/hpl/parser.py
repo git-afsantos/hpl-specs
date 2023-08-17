@@ -5,29 +5,44 @@
 # Imports
 ###############################################################################
 
-from enum import Enum
-import math
 from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
+from enum import Enum
+import math
+
 from attrs import frozen
-from hpl.ast.predicates import predicate_from_expression
-from hpl.types import ARRAY_TYPE, MESSAGE_TYPE, NUMBER_TYPE, DataType
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedCharacters, UnexpectedToken
 from lark.visitors import v_args
 
 from hpl.ast import (
-    HplSpecification, HplProperty, HplScope, HplPattern, HplSimpleEvent,
-    HplPredicate, HplVacuousTruth, HplQuantifier,
-    HplUnaryOperator, HplBinaryOperator, HplSet, HplRange, HplLiteral,
-    HplVarReference, HplFunctionCall, HplFieldAccess, HplArrayAccess,
-    HplThisMessage, HplEventDisjunction
+    HplArrayAccess,
+    HplBinaryOperator,
+    HplEventDisjunction,
+    HplFieldAccess,
+    HplFunctionCall,
+    HplLiteral,
+    HplPattern,
+    HplPredicate,
+    HplProperty,
+    HplQuantifier,
+    HplRange,
+    HplScope,
+    HplSet,
+    HplSimpleEvent,
+    HplSpecification,
+    HplThisMessage,
+    HplUnaryOperator,
+    HplVacuousTruth,
+    HplVarReference,
 )
 from hpl.ast.base import HplAstObject
 from hpl.ast.events import HplEvent
 from hpl.ast.expressions import HplExpression, _convert_binary_operator, _convert_unary_operator
-from hpl.grammar import PREDICATE_GRAMMAR, HPL_GRAMMAR
+from hpl.ast.predicates import predicate_from_expression
 from hpl.errors import HplSyntaxError
+from hpl.grammar import HPL_GRAMMAR, PREDICATE_GRAMMAR
+from hpl.types import ARRAY_TYPE, MESSAGE_TYPE, NUMBER_TYPE
 
 ###############################################################################
 # Constants
@@ -129,8 +144,7 @@ class PropertyTransformer(Transformer):
         if len(children) == 2:
             return HplEventDisjunction(children[0], children[1])
         else:
-            return HplEventDisjunction(
-                children[0], self.event_disjunction(children[1:]))
+            return HplEventDisjunction(children[0], self.event_disjunction(children[1:]))
 
     def event(self, msg: Tuple[str, Optional[str]], phi: Optional[HplPredicate]) -> HplSimpleEvent:
         name, alias = msg
@@ -256,13 +270,13 @@ class PropertyTransformer(Transformer):
     def number(self, token: str) -> HplLiteral:
         try:
             return HplLiteral(token, int(token))
-        except ValueError as e:
+        except ValueError:
             return HplLiteral(token, float(token))
 
     def signed_number(self, token: str) -> HplLiteral:
         try:
             return HplLiteral(token, int(token))
-        except ValueError as e:
+        except ValueError:
             return HplLiteral(token, float(token))
 
     def int_literal(self, token: str) -> HplLiteral:

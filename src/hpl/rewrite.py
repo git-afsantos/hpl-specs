@@ -23,13 +23,7 @@ from hpl.ast.expressions import (
     is_self_reference,
     is_var_reference,
 )
-from hpl.ast.predicates import (
-    HplContradiction,
-    HplPredicate,
-    HplPredicateExpression,
-    HplVacuousTruth,
-    predicate_from_expression,
-)
+from hpl.ast.predicates import HplPredicate, HplVacuousTruth, predicate_from_expression
 from hpl.errors import invalid_type
 
 ###############################################################################
@@ -44,8 +38,7 @@ P = TypeVar('P', HplPredicate, HplExpression)
 
 
 def replace_this_with_var(predicate_or_expression: P, alias: str) -> P:
-    if (not predicate_or_expression.is_predicate
-            and not predicate_or_expression.is_expression):
+    if not predicate_or_expression.is_predicate and not predicate_or_expression.is_expression:
         raise invalid_type('HplPredicate or HplExpression', predicate_or_expression)
     if not isinstance(alias, str):
         raise invalid_type('string', alias)
@@ -57,8 +50,7 @@ def replace_this_with_var(predicate_or_expression: P, alias: str) -> P:
 
 
 def replace_var_with_this(predicate_or_expression: P, alias: str) -> P:
-    if (not predicate_or_expression.is_predicate
-            and not predicate_or_expression.is_expression):
+    if not predicate_or_expression.is_predicate and not predicate_or_expression.is_expression:
         raise invalid_type('HplPredicate or HplExpression', predicate_or_expression)
     if not isinstance(alias, str):
         raise invalid_type('string', alias)
@@ -70,8 +62,7 @@ def replace_var_with_this(predicate_or_expression: P, alias: str) -> P:
 
 
 def refactor_reference(predicate_or_expression: P, alias: str) -> Tuple[P, P]:
-    if (not predicate_or_expression.is_predicate
-            and not predicate_or_expression.is_expression):
+    if not predicate_or_expression.is_predicate and not predicate_or_expression.is_expression:
         raise invalid_type('HplPredicate or HplExpression', predicate_or_expression)
     if not isinstance(alias, str):
         raise invalid_type('string', alias)
@@ -79,6 +70,7 @@ def refactor_reference(predicate_or_expression: P, alias: str) -> Tuple[P, P]:
         return _refactor_ref_pred(predicate_or_expression, alias)
     else:
         return _refactor_ref_expr(predicate_or_expression, alias)
+
 
 ###############################################################################
 # Formula Rewriting - Helper Functions
@@ -186,7 +178,7 @@ def _split_negation(neg: HplUnaryOperator, alias: str) -> Tuple[HplExpression, H
         # cannot split into two parts
         return (true(), neg)
     if expr.is_quantifier:
-        assert isinstance(expr,HplQuantifier)
+        assert isinstance(expr, HplQuantifier)
         if expr.is_existential:
             # (~E x: p)  ==  (A x: ~p)
             p = Not(expr.condition)

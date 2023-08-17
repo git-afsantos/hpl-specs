@@ -7,7 +7,7 @@
 
 from typing import Any, Final, Iterable, Mapping, Tuple
 
-from enum import auto, Flag
+from enum import Flag, auto
 
 from attrs import field, frozen
 from attrs.validators import ge, in_, instance_of
@@ -249,14 +249,14 @@ class RangedType(TypeToken):
 
     @classmethod
     def float32(cls, name: str = 'float32') -> 'RangedType':
-        min_value = -3.3999999521443642E+38
-        max_value = 3.3999999521443642E+38
+        min_value = -3.3999999521443642e38
+        max_value = 3.3999999521443642e38
         return cls(name, type=DataType.NUMBER, min_value=min_value, max_value=max_value)
 
     @classmethod
     def float64(cls, name: str = 'float64') -> 'RangedType':
-        min_value = -1.7E+308
-        max_value = 1.7E+308
+        min_value = -1.7e308
+        max_value = 1.7e308
         return cls(name, type=DataType.NUMBER, min_value=min_value, max_value=max_value)
 
 

@@ -7,8 +7,8 @@
 
 from pytest import raises
 
-from hpl.parser import predicate_parser
 from hpl.errors import HplSanityError, HplSyntaxError
+from hpl.parser import predicate_parser
 
 ###############################################################################
 # Test Code

@@ -7,41 +7,41 @@
 
 from pytest import raises
 
-from hpl.parser import property_parser
 from hpl.errors import HplSanityError, HplSyntaxError
-
-
-###############################################################################
-# Property Examples
-###############################################################################
-
-BAD_PROPERTIES = [
-    # missing scope
-    "some topic",
-
-    # using comma instead of 'and' to separate filters
-    'globally: some topic {int < 1, float < 2, string = "hello"}',
-
-    # filters must be non-empty
-    "globally: some topic {}",
-
-    # cannot compare numbers to strings
-    'globally: some topic {int > "42"}',
-
-    # cannot duplicate aliases
-    "globally: input as M causes output1 as M",
-
-    # missing parenthesis
-    "globally: input1 as M or input2 causes output1 as M"
-]
-
+from hpl.parser import property_parser
 
 ###############################################################################
 # Test Code
 ###############################################################################
 
-def test_invalid_properties():
-    parser = property_parser()
-    for test_str in BAD_PROPERTIES:
-        with raises((HplSanityError, HplSyntaxError, TypeError)):
-            parser.parse(test_str)
+parser = property_parser()
+
+
+def test_missing_scope():
+    with raises(HplSyntaxError):
+        parser.parse('some topic')
+
+
+def test_using_comma_instead_of_and():
+    with raises(HplSyntaxError):
+        parser.parse('globally: some topic {int < 1, float < 2, string = "hello"}')
+
+
+def test_filters_must_be_non_empty():
+    with raises(HplSyntaxError):
+        parser.parse('globally: some topic {}')
+
+
+def test_cannot_compare_numbers_to_strings():
+    with raises(TypeError):
+        parser.parse('globally: some topic {int > "42"}')
+
+
+def test_cannot_duplicate_aliases():
+    with raises(HplSanityError):
+        parser.parse('globally: input as M causes output1 as M')
+
+
+def test_missing_parenthesis():
+    with raises(HplSyntaxError):
+        parser.parse('globally: input1 as M or input2 causes output1 as M')
