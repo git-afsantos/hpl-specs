@@ -37,17 +37,17 @@ _pattern: existence
         | prevention
         | requirement
 
-existence: "some" _any_event [time_bound]
+existence: "some" _any_event _time_bound
 
-absence: "no" _any_event [time_bound]
+absence: "no" _any_event _time_bound
 
-response: _any_event "causes" _any_event [time_bound]
+response: _any_event "causes" _any_event _time_bound
 
-prevention: _any_event "forbids" _any_event [time_bound]
+prevention: _any_event "forbids" _any_event _time_bound
 
-requirement: _any_event "requires" _any_event [time_bound]
+requirement: _any_event "requires" _any_event _time_bound
 
-time_bound: "within" time_amount
+_time_bound: ["within" time_amount]
 
 _any_event: event
           | event_disjunction
