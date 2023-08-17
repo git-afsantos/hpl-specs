@@ -210,7 +210,7 @@ class PropertyTransformer(Transformer):
     def range_literal(self, lr: str, lb: HplExpression, ub: HplExpression, rr: str) -> HplRange:
         exc_min = lr.startswith('!')
         exc_max = rr.endswith('!')
-        return HplRange(lb, ub, exc_min=exc_min, exc_max=exc_max)
+        return HplRange(lb, ub, exclude_min=exc_min, exclude_max=exc_max)
 
     def variable(self, token: str) -> HplVarReference:
         return HplVarReference(token)
