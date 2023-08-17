@@ -22,7 +22,7 @@ from hpl.ast.expressions import (
     HplValue,
     Not,
 )
-from hpl.errors import HplSanityError
+from hpl.errors import HplSanityError, invalid_type
 from hpl.types import TypeToken
 
 ###############################################################################
@@ -284,7 +284,8 @@ class HplContradiction(HplPredicate):
 
 
 def predicate_from_expression(expr: HplExpression) -> HplPredicate:
-    assert expr.can_be_bool
+    if not expr.can_be_bool:
+        raise invalid_type('boolean', expr)
     if expr.is_value and expr.is_literal:
         assert isinstance(expr, HplLiteral)
         assert isinstance(expr.value, bool)
