@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## v1.0.0 - 2023-08-07
 ### Changed
 - Modernized tooling and package structure.
+- Improved API in various aspects, with some backward-incompatible changes.
+- Added a number of attribute validators for AST data types.
 
 ## v0.2.3 - 2021-08-27
 ### Fixed
