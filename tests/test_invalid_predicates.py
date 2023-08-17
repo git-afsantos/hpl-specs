@@ -1,78 +1,111 @@
-# -*- coding: utf-8 -*-
-
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
-
 
 ###############################################################################
 # Imports
 ###############################################################################
 
-import logging
-from sys import exit
+from pytest import raises
 
+from hpl.errors import HplSanityError, HplSyntaxError
 from hpl.parser import predicate_parser
-from hpl.exceptions import HplSanityError, HplSyntaxError, HplTypeError
-
-
-###############################################################################
-# Predicate Examples
-###############################################################################
-
-BAD_PREDICATES = [
-    "a + b + c",
-    "{1} and [2 to f.g.h]",
-    "(1 and 2) + (not x)",
-    "forall 42 in D: phi",
-    "forall x in 42: phi",
-    "forall x in D: 42",
-    "a implies iff b",
-    "a implies 42",
-    "a and 42",
-    "a or 42",
-    "not 42",
-    "not a + b",
-    "-(a and b)",
-    "a < b < c",
-    "(a < b) < c",
-    "x = -{1,2,3}",
-    "a implies forall x in xs: b",
-    "a[1][2]",
-    "(a + 1) > 0 and a",
-    "exists x in xs: (a[@x] implies @x)",
-    "@a < 3",
-    "---42 = -42",
-    "f(x) > 0",
-]
-
 
 ###############################################################################
 # Test Code
 ###############################################################################
 
-def test_invalid_predicates():
-    parser = predicate_parser()
-    for test_str in BAD_PREDICATES:
-        print "\n  #", repr(test_str)
-        try:
-            ast = parser.parse(test_str)
-            print "[Parsing] OK (unexpected)"
-            print ""
-            print repr(ast)
-            return 1
-        except (HplSanityError, HplSyntaxError, HplTypeError) as e:
-            print "[Parsing] FAIL (expected)"
-            print "  >>", str(e)
-    print "\nAll", str(len(BAD_PREDICATES)), "tests passed."
-    return 0
+parser = predicate_parser()
 
 
-def main():
-    logging.basicConfig(level=logging.DEBUG)
-    if test_invalid_predicates():
-        assert False
-    return 0
+def test_addition_is_not_bool():
+    with raises(TypeError):
+        parser.parse('a + b + c')
 
 
-if __name__ == "__main__":
-    exit(main())
+def test_set_is_not_bool():
+    with raises(TypeError):
+        parser.parse('{1} and [2 to f.g.h]')
+
+
+def test_number_is_not_bool():
+    with raises(TypeError):
+        parser.parse('(1 and 2) + (not x)')
+
+
+def test_forall_var_should_be_name():
+    with raises(HplSyntaxError):
+        parser.parse('forall 42 in D: phi')
+
+
+def test_forall_domain_should_be_set():
+    with raises(TypeError):
+        parser.parse('forall x in 42: phi')
+
+
+def test_forall_condition_should_be_bool():
+    with raises(TypeError):
+        parser.parse('forall x in D: 42')
+
+
+def test_bad_syntax_two_binops():
+    with raises(HplSyntaxError):
+        parser.parse('a implies iff b')
+
+
+def test_bool_binop_arg_should_be_bool():
+    with raises(TypeError):
+        parser.parse('a implies 42')
+
+
+def test_negation_arg_should_be_bool():
+    with raises(TypeError):
+        parser.parse('not 42')
+
+
+def test_number_binop_arg_should_be_number():
+    with raises(TypeError):
+        parser.parse('not a + b')
+
+
+def test_minus_arg_should_be_number():
+    with raises(TypeError):
+        parser.parse('-(a and b)')
+
+
+def test_relational_op_arg_should_be_number():
+    with raises(HplSyntaxError):
+        parser.parse('a < b < c')
+    with raises(TypeError):
+        parser.parse('(a < b) < c')
+
+
+def test_set_is_not_number():
+    with raises(TypeError):
+        parser.parse('x = -{1,2,3}')
+
+
+def test_forall_condition_should_include_var_ref():
+    with raises(HplSanityError):
+        parser.parse('a implies forall x in xs: b')
+
+
+def test_all_eq_refs_have_same_type():
+    with raises(TypeError):
+        parser.parse('(a + 1) > 0 and a')
+    with raises(TypeError):
+        parser.parse('exists x in xs: (a[@x] implies @x)')
+
+
+def test_no_unknown_refs():
+    with raises(HplSanityError):
+        parser.parse('@a < 3')
+
+
+def test_at_least_one_self_ref():
+    with raises(HplSanityError):
+        parser.parse('---42 = -42')
+
+
+def test_unknown_function():
+    with raises(ValueError):
+        parser.parse('f(x) > 0')

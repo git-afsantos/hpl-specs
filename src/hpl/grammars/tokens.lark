@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright © 2021 André Santos
 
-ros_name: ROS_NAME
+channel_name: CHANNEL_NAME
 
 int_literal: INT
 string: ESCAPED_STRING
@@ -12,14 +12,17 @@ boolean: TRUE | FALSE
 TRUE: "True"
 FALSE: "False"
 
-RELATIONAL_OPERATOR: EQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
-EQ_OPERATOR: "=" | "!="
+RELATIONAL_OPERATOR: EQ_OPERATOR | NEQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
+EQ_OPERATOR: "="
+NEQ_OPERATOR: "!="
 COMP_OPERATOR: "<" "="?
              | ">" "="?
 IN_OPERATOR.2: "in"
 
 NOT_OPERATOR.3: "not"
-IF_OPERATOR.3: "implies" | "iff"
+IF_OPERATOR.3: IMPLIES_OPERATOR | IFF_OPERATOR
+IMPLIES_OPERATOR.3: "implies"
+IFF_OPERATOR.3: "iff"
 OR_OPERATOR.3: "or"
 AND_OPERATOR.3: "and"
 
@@ -38,7 +41,7 @@ L_RANGE_INC: "["
 R_RANGE_EXC: "]!"
 R_RANGE_INC: "]"
 
-ROS_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
+CHANNEL_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
 
 VAR_REF: "@" CNAME
 

@@ -1,6 +1,6 @@
 # Language Overview
 
-This document provides an overview of the HAROS Property Specification Language (HPL).
+This document provides an overview of the High-level Property Specification Language (HPL).
 Here you may find some [context](#context) and motivation for the language, its [core concepts](#concept) and a few [examples](#in-practice).
 
 ## Context
@@ -9,7 +9,7 @@ In publisher-subscriber architectures (especially), where there are many-to-many
 All application logic should revolve around the *exchanged messages* and the *data* they carry, since these are the main observable actions that nodes take, from the software's perspective.
 Consequently, properties about a system (or component) should also focus on the exchanged messages and the relations between messages.
 
-This approach applies naturally to the message-passing nature of ROS.
+This approach applies naturally to the message-passing nature of middlewares such as the Robot Operating System (ROS).
 For instance, an informal property for a mobile robot could state that *"whenever a message is observed on topic* `/bumper` *such that the robot's bumper is pressed, a message on topic* `/stop` *should follow, within 100 milliseconds of the first"*.
 Considering this example, and how messages work in ROS, a specification language for ROS systems (such as HPL) must provide a few basic features, namely:
 
@@ -17,10 +17,6 @@ Considering this example, and how messages work in ROS, a specification language
 - references to message contents (e.g., observing the contents of the `/bumper` message);
 - temporal operators and relations (e.g., the message on `/stop` is observed after *and because of* the message on `/bumper`);
 - real-time behaviour specifications (e.g., observing a message at most 100 milliseconds after observing another).
-
-The publisher-subscriber paradigm is the prevalent means of communication in ROS ([SantosCMAS:17](https://ieeexplore.ieee.org/document/8206237)).
-HPL currently focuses on this single paradigm.
-Other message communication mechanisms, such as ROS Services or ROS Actions are left for future work.
 
 ## Concept
 

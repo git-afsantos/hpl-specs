@@ -5,11 +5,11 @@ predicate: "{" condition "}"
 
 top_level_condition: condition
 
-condition: [condition IF_OPERATOR] disjunction
+condition: (condition IF_OPERATOR)? disjunction
 
-disjunction: [disjunction OR_OPERATOR] conjunction
+disjunction: (disjunction OR_OPERATOR)? conjunction
 
-conjunction: [conjunction AND_OPERATOR] _logic_expr
+conjunction: (conjunction AND_OPERATOR)? _logic_expr
 
 _logic_expr: negation
            | quantification
@@ -19,13 +19,13 @@ negation: NOT_OPERATOR _logic_expr
 
 quantification: QUANT_OPERATOR CNAME "in" _atomic_value ":" _logic_expr
 
-atomic_condition: expr [RELATIONAL_OPERATOR expr]
+atomic_condition: expr (RELATIONAL_OPERATOR expr)?
 
-expr: [expr ADD_OPERATOR] term
+expr: (expr ADD_OPERATOR)? term
 
-term: [term MULT_OPERATOR] factor
+term: (term MULT_OPERATOR)? factor
 
-factor: [factor POWER_OPERATOR] _exponent
+factor: (factor POWER_OPERATOR)? _exponent
 
 _exponent: _atomic_value
          | negative_number
@@ -46,7 +46,7 @@ number_constant: CONSTANT
 
 enum_literal: "{" _enum_member "}"
 
-_enum_member: [_enum_member ","] expr
+_enum_member: (_enum_member ",")? expr
 
 range_literal: _start_range expr "to" expr _end_range
 

@@ -5,14 +5,18 @@
 # Imports
 ###############################################################################
 
-from importlib.metadata import PackageNotFoundError, version  # pragma: no cover
+import hpl
 
 ###############################################################################
-# Constants
+# Tests
 ###############################################################################
 
-try:
-    __version__ = version('hpl')
-except PackageNotFoundError:  # pragma: no cover
-    # package is not installed
-    __version__ = 'unknown'
+
+def test_import_was_ok():
+    assert True
+
+
+def test_pkg_has_version():
+    assert hasattr(hpl, '__version__')
+    assert isinstance(hpl.__version__, str)
+    assert hpl.__version__ != ''

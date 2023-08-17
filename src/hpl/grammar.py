@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # SPDX-License-Identifier: MIT
 # Copyright © 2021 André Santos
 
@@ -8,11 +6,11 @@ predicate: "{" condition "}"
 
 top_level_condition: condition
 
-condition: [condition IF_OPERATOR] disjunction
+condition: (condition IF_OPERATOR)? disjunction
 
-disjunction: [disjunction OR_OPERATOR] conjunction
+disjunction: (disjunction OR_OPERATOR)? conjunction
 
-conjunction: [conjunction AND_OPERATOR] _logic_expr
+conjunction: (conjunction AND_OPERATOR)? _logic_expr
 
 _logic_expr: negation
            | quantification
@@ -22,13 +20,13 @@ negation: NOT_OPERATOR _logic_expr
 
 quantification: QUANT_OPERATOR CNAME "in" _atomic_value ":" _logic_expr
 
-atomic_condition: expr [RELATIONAL_OPERATOR expr]
+atomic_condition: expr (RELATIONAL_OPERATOR expr)?
 
-expr: [expr ADD_OPERATOR] term
+expr: (expr ADD_OPERATOR)? term
 
-term: [term MULT_OPERATOR] factor
+term: (term MULT_OPERATOR)? factor
 
-factor: [factor POWER_OPERATOR] _exponent
+factor: (factor POWER_OPERATOR)? _exponent
 
 _exponent: _atomic_value
          | negative_number
@@ -49,7 +47,7 @@ number_constant: CONSTANT
 
 enum_literal: "{" _enum_member "}"
 
-_enum_member: [_enum_member ","] expr
+_enum_member: (_enum_member ",")? expr
 
 range_literal: _start_range expr "to" expr _end_range
 
@@ -76,7 +74,7 @@ array_access: _reference "[" _index "]"
 
 _index: expr
 
-ros_name: ROS_NAME
+channel_name: CHANNEL_NAME
 
 int_literal: INT
 string: ESCAPED_STRING
@@ -87,14 +85,17 @@ boolean: TRUE | FALSE
 TRUE: "True"
 FALSE: "False"
 
-RELATIONAL_OPERATOR: EQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
-EQ_OPERATOR: "=" | "!="
+RELATIONAL_OPERATOR: EQ_OPERATOR | NEQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
+EQ_OPERATOR: "="
+NEQ_OPERATOR: "!="
 COMP_OPERATOR: "<" "="?
              | ">" "="?
 IN_OPERATOR.2: "in"
 
 NOT_OPERATOR.3: "not"
-IF_OPERATOR.3: "implies" | "iff"
+IF_OPERATOR.3: IMPLIES_OPERATOR | IFF_OPERATOR
+IMPLIES_OPERATOR.3: "implies"
+IFF_OPERATOR.3: "iff"
 OR_OPERATOR.3: "or"
 AND_OPERATOR.3: "and"
 
@@ -113,7 +114,7 @@ L_RANGE_INC: "["
 R_RANGE_EXC: "]!"
 R_RANGE_INC: "]"
 
-ROS_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
+CHANNEL_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
 
 VAR_REF: "@" CNAME
 
@@ -133,13 +134,13 @@ FREQ_UNIT: "hz"
 HPL_GRAMMAR = r"""
 hpl_file: _list_of_properties
 
-_list_of_properties: [_list_of_properties] hpl_property
+_list_of_properties: _list_of_properties? hpl_property
 
-hpl_property: metadata? _scope ":" _pattern
+hpl_property: [metadata] _scope ":" _pattern
 
 metadata: _metadata_items
 
-_metadata_items: [_metadata_items] "#" _metadata_item
+_metadata_items: _metadata_items? "#" _metadata_item
 
 _metadata_item: metadata_id
               | metadata_title
@@ -157,13 +158,13 @@ _scope: global_scope
 
 global_scope: "globally"
 
-after_until: "after" activator ["until" terminator]
+after_until: "after" _activator ["until" _terminator]
 
-until: "until" terminator
+until: "until" _terminator
 
-activator: _any_event
+_activator: _any_event
 
-terminator: _any_event
+_terminator: _any_event
 
 _pattern: existence
         | absence
@@ -171,42 +172,42 @@ _pattern: existence
         | prevention
         | requirement
 
-existence: "some" _any_event _time_bound?
+existence: "some" _any_event _time_bound
 
-absence: "no" _any_event _time_bound?
+absence: "no" _any_event _time_bound
 
-response: _any_event "causes" _any_event _time_bound?
+response: _any_event "causes" _any_event _time_bound
 
-prevention: _any_event "forbids" _any_event _time_bound?
+prevention: _any_event "forbids" _any_event _time_bound
 
-requirement: _any_event "requires" _any_event _time_bound?
+requirement: _any_event "requires" _any_event _time_bound
 
-_time_bound: "within" time_amount
+_time_bound: ["within" time_amount]
 
 _any_event: event
           | event_disjunction
 
-event: message predicate?
+event: message [predicate]
 
 event_disjunction: "(" (event "or")+ event ")"
 
-message: ros_name _alias?
+message: channel_name [alias]
 
 time_amount: NUMBER TIME_UNIT
 
 frequency: NUMBER FREQ_UNIT
 
-_alias: "as" CNAME
+alias: "as" CNAME
 
 predicate: "{" condition "}"
 
 top_level_condition: condition
 
-condition: [condition IF_OPERATOR] disjunction
+condition: (condition IF_OPERATOR)? disjunction
 
-disjunction: [disjunction OR_OPERATOR] conjunction
+disjunction: (disjunction OR_OPERATOR)? conjunction
 
-conjunction: [conjunction AND_OPERATOR] _logic_expr
+conjunction: (conjunction AND_OPERATOR)? _logic_expr
 
 _logic_expr: negation
            | quantification
@@ -216,13 +217,13 @@ negation: NOT_OPERATOR _logic_expr
 
 quantification: QUANT_OPERATOR CNAME "in" _atomic_value ":" _logic_expr
 
-atomic_condition: expr [RELATIONAL_OPERATOR expr]
+atomic_condition: expr (RELATIONAL_OPERATOR expr)?
 
-expr: [expr ADD_OPERATOR] term
+expr: (expr ADD_OPERATOR)? term
 
-term: [term MULT_OPERATOR] factor
+term: (term MULT_OPERATOR)? factor
 
-factor: [factor POWER_OPERATOR] _exponent
+factor: (factor POWER_OPERATOR)? _exponent
 
 _exponent: _atomic_value
          | negative_number
@@ -243,7 +244,7 @@ number_constant: CONSTANT
 
 enum_literal: "{" _enum_member "}"
 
-_enum_member: [_enum_member ","] expr
+_enum_member: (_enum_member ",")? expr
 
 range_literal: _start_range expr "to" expr _end_range
 
@@ -270,7 +271,7 @@ array_access: _reference "[" _index "]"
 
 _index: expr
 
-ros_name: ROS_NAME
+channel_name: CHANNEL_NAME
 
 int_literal: INT
 string: ESCAPED_STRING
@@ -281,14 +282,17 @@ boolean: TRUE | FALSE
 TRUE: "True"
 FALSE: "False"
 
-RELATIONAL_OPERATOR: EQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
-EQ_OPERATOR: "=" | "!="
+RELATIONAL_OPERATOR: EQ_OPERATOR | NEQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
+EQ_OPERATOR: "="
+NEQ_OPERATOR: "!="
 COMP_OPERATOR: "<" "="?
              | ">" "="?
 IN_OPERATOR.2: "in"
 
 NOT_OPERATOR.3: "not"
-IF_OPERATOR.3: "implies" | "iff"
+IF_OPERATOR.3: IMPLIES_OPERATOR | IFF_OPERATOR
+IMPLIES_OPERATOR.3: "implies"
+IFF_OPERATOR.3: "iff"
 OR_OPERATOR.3: "or"
 AND_OPERATOR.3: "and"
 
@@ -307,7 +311,7 @@ L_RANGE_INC: "["
 R_RANGE_EXC: "]!"
 R_RANGE_INC: "]"
 
-ROS_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
+CHANNEL_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
 
 VAR_REF: "@" CNAME
 
@@ -323,3 +327,12 @@ FREQ_UNIT: "hz"
 %ignore WS
 
 """
+
+IN_OPERATOR = 'in'
+NOT_OPERATOR = 'not'
+IMPLIES_OPERATOR = 'implies'
+IFF_OPERATOR = 'iff'
+OR_OPERATOR = 'or'
+AND_OPERATOR = 'and'
+ALL_OPERATOR = 'forall'
+SOME_OPERATOR = 'exists'
