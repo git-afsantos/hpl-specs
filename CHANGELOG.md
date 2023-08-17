@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## v1.0.0 - 2023-08-07
 ### Changed
+- Python 2 is no longer supported.
 - Modernized tooling and package structure.
 - Improved API in various aspects, with some backward-incompatible changes.
 - AST objects are mostly immutable, with available methods to create mutated copies.
