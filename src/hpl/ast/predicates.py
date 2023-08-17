@@ -11,7 +11,7 @@ from attrs import field, frozen
 from attrs.validators import instance_of
 
 from hpl.ast.base import HplAstObject
-from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplExpression, HplLiteral, Not
+from hpl.ast.expressions import And, BuiltinUnaryOperator, DataType, HplDataAccess, HplExpression, HplFieldAccess, HplLiteral, HplValue, Not
 from hpl.errors import HplSanityError
 from hpl.types import TypeToken
 
@@ -85,6 +85,7 @@ class HplPredicateExpression(HplPredicate):
             raise TypeError(f'not a boolean expression: {{{expr}}}')
         ref_table = {}
         for obj in expr.iterate():
+            assert isinstance(obj, HplExpression)
             if obj.is_accessor or (obj.is_value and obj.is_variable):
                 key = str(obj)
                 refs = ref_table.get(key)
@@ -113,15 +114,22 @@ class HplPredicateExpression(HplPredicate):
             for ref in ref_group:
                 if not ref.is_accessor:
                     break
+                assert isinstance(ref, HplDataAccess)
                 if ref.is_indexed:
                     break
+                assert isinstance(ref, HplFieldAccess)
                 if not ref.message.is_value:
                     break
+                assert isinstance(ref.message, HplValue)
                 assert ref.message.is_reference
                 if not ref.message.is_this_msg:
                     break
                 return  # OK
         raise HplSanityError.predicate_without_self_refs(self)
+
+    @property
+    def condition(self) -> HplExpression:
+        return self.expression
 
     def children(self) -> Tuple[HplExpression]:
         return (self.expression,)
@@ -172,6 +180,10 @@ class HplVacuousTruth(HplPredicate):
     def is_true(self) -> bool:
         return True
 
+    @property
+    def condition(self) -> HplExpression:
+        return HplLiteral('True', True)
+
     def is_fully_typed(self) -> bool:
         return True
 
@@ -216,6 +228,10 @@ class HplContradiction(HplPredicate):
     @property
     def is_true(self) -> bool:
         return False
+
+    @property
+    def condition(self) -> HplExpression:
+        return HplLiteral('False', False)
 
     def is_fully_typed(self) -> bool:
         return True
