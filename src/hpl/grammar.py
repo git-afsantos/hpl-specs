@@ -191,13 +191,13 @@ event: message [predicate]
 
 event_disjunction: "(" (event "or")+ event ")"
 
-message: channel_name [_alias]
+message: channel_name [alias]
 
 time_amount: NUMBER TIME_UNIT
 
 frequency: NUMBER FREQ_UNIT
 
-_alias: "as" CNAME
+alias: "as" CNAME
 
 predicate: "{" condition "}"
 
