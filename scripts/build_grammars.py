@@ -94,17 +94,17 @@ path = PKG / 'grammar.py'
 path.write_text(GRAMMAR_PY, encoding='utf8')
 
 
-TEST_GRAMMAR_PY = f'''\
-# SPDX-License-Identifier: MIT
-# Copyright © 2023 André Santos
+# TEST_GRAMMAR_PY = f'''\
+# # SPDX-License-Identifier: MIT
+# # Copyright © 2023 André Santos
+# 
+# HPL_GRAMMAR = r"""
+# {g_files}
+# {g_properties}
+# {g_predicates}
+# {distorted_tokens(g_tokens)}
+# """
+# '''
 
-HPL_GRAMMAR = r"""
-{g_files}
-{g_properties}
-{g_predicates}
-{distorted_tokens(g_tokens)}
-"""
-'''
-
-path = HERE.parent / 'tests' / 'grammar.py'
-path.write_text(TEST_GRAMMAR_PY, encoding='utf8')
+# path = HERE.parent / 'tests' / 'grammar.py'
+# path.write_text(TEST_GRAMMAR_PY, encoding='utf8')

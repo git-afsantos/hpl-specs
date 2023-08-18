@@ -5,8 +5,13 @@
 # Imports
 ###############################################################################
 
-from hpl.ast import HplProperty
+from hypothesis import assume, given, settings
+
+from hpl.ast import HplAstObject, HplProperty
+from hpl.errors import HplSanityError
 from hpl.parser import property_parser
+
+from .strategies import properties
 
 ###############################################################################
 # Property Examples
@@ -47,9 +52,25 @@ GOOD_PROPERTIES = [
 # Test Code
 ###############################################################################
 
+parser = property_parser()
 
-def test_valid_properties():
-    parser = property_parser()
+
+def test_valid_handwritten_properties():
     for test_str in GOOD_PROPERTIES:
         ast = parser.parse(test_str)
+        assert isinstance(ast, HplAstObject)
+        assert ast.is_property
         assert isinstance(ast, HplProperty)
+
+
+@given(properties())
+@settings(max_examples=500)
+def test_valid_generated_properties(text: str):
+    try:
+        ast = parser.parse(text)
+    except (HplSanityError, TypeError):
+        assume(False)  # discard insane properties
+
+    assert isinstance(ast, HplAstObject)
+    assert ast.is_property
+    assert isinstance(ast, HplProperty)
