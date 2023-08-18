@@ -15,8 +15,7 @@ FALSE: "False"
 RELATIONAL_OPERATOR: EQ_OPERATOR | NEQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
 EQ_OPERATOR: "="
 NEQ_OPERATOR: "!="
-COMP_OPERATOR: "<" "="?
-             | ">" "="?
+COMP_OPERATOR: /<=?/ | />=?/
 IN_OPERATOR.2: "in"
 
 NOT_OPERATOR.3: "not"
@@ -27,8 +26,8 @@ OR_OPERATOR.3: "or"
 AND_OPERATOR.3: "and"
 
 QUANT_OPERATOR.4: ALL_OPERATOR | SOME_OPERATOR
-ALL_OPERATOR: "forall"
-SOME_OPERATOR: "exists"
+ALL_OPERATOR.4: "forall"
+SOME_OPERATOR.4: "exists"
 
 CONSTANT.5: "PI" | "INF" | "NAN" | "E"
 ADD_OPERATOR: "+" | "-"
@@ -40,6 +39,20 @@ L_RANGE_EXC: "!["
 L_RANGE_INC: "["
 R_RANGE_EXC: "]!"
 R_RANGE_INC: "]"
+
+_KW_TO.4: "to"
+_KW_IN.4: "in"
+_KW_AS.4: "as"
+_KW_OR.4: "or"
+_KW_WITHIN.4: "within"
+_KW_NO.4: "no"
+_KW_SOME.4: "some"
+_KW_REQUIRES.4: "requires"
+_KW_CAUSES.4: "causes"
+_KW_FORBIDS.4: "forbids"
+_KW_AFTER.4: "after"
+_KW_UNTIL.4: "until"
+_KW_GLOBALLY.4: "globally"
 
 CHANNEL_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
 

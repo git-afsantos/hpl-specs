@@ -2,9 +2,9 @@
 # Copyright © 2021 André Santos
 
 PREDICATE_GRAMMAR = r"""
-predicate: "{" condition "}"
+hpl_predicate: "{" condition "}"
 
-top_level_condition: condition
+hpl_expression: condition
 
 condition: (condition IF_OPERATOR)? disjunction
 
@@ -16,9 +16,9 @@ _logic_expr: negation
            | quantification
            | atomic_condition
 
-negation: NOT_OPERATOR _logic_expr
+negation.5: NOT_OPERATOR _logic_expr
 
-quantification: QUANT_OPERATOR CNAME "in" _atomic_value ":" _logic_expr
+quantification.3: QUANT_OPERATOR CNAME _KW_IN _atomic_value ":" _logic_expr
 
 atomic_condition: expr (RELATIONAL_OPERATOR expr)?
 
@@ -49,7 +49,7 @@ enum_literal: "{" _enum_member "}"
 
 _enum_member: (_enum_member ",")? expr
 
-range_literal: _start_range expr "to" expr _end_range
+range_literal: _start_range expr _KW_TO expr _end_range
 
 _start_range: L_RANGE_EXC | L_RANGE_INC
 
@@ -88,8 +88,7 @@ FALSE: "False"
 RELATIONAL_OPERATOR: EQ_OPERATOR | NEQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
 EQ_OPERATOR: "="
 NEQ_OPERATOR: "!="
-COMP_OPERATOR: "<" "="?
-             | ">" "="?
+COMP_OPERATOR: /<=?/ | />=?/
 IN_OPERATOR.2: "in"
 
 NOT_OPERATOR.3: "not"
@@ -100,8 +99,8 @@ OR_OPERATOR.3: "or"
 AND_OPERATOR.3: "and"
 
 QUANT_OPERATOR.4: ALL_OPERATOR | SOME_OPERATOR
-ALL_OPERATOR: "forall"
-SOME_OPERATOR: "exists"
+ALL_OPERATOR.4: "forall"
+SOME_OPERATOR.4: "exists"
 
 CONSTANT.5: "PI" | "INF" | "NAN" | "E"
 ADD_OPERATOR: "+" | "-"
@@ -113,6 +112,20 @@ L_RANGE_EXC: "!["
 L_RANGE_INC: "["
 R_RANGE_EXC: "]!"
 R_RANGE_INC: "]"
+
+_KW_TO.4: "to"
+_KW_IN.4: "in"
+_KW_AS.4: "as"
+_KW_OR.4: "or"
+_KW_WITHIN.4: "within"
+_KW_NO.4: "no"
+_KW_SOME.4: "some"
+_KW_REQUIRES.4: "requires"
+_KW_CAUSES.4: "causes"
+_KW_FORBIDS.4: "forbids"
+_KW_AFTER.4: "after"
+_KW_UNTIL.4: "until"
+_KW_GLOBALLY.4: "globally"
 
 CHANNEL_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
 
@@ -134,13 +147,13 @@ FREQ_UNIT: "hz"
 HPL_GRAMMAR = r"""
 hpl_file: _list_of_properties
 
-_list_of_properties: _list_of_properties? hpl_property
+_list_of_properties: (_list_of_properties)? hpl_property
 
 hpl_property: [metadata] _scope ":" _pattern
 
 metadata: _metadata_items
 
-_metadata_items: _metadata_items? "#" _metadata_item
+_metadata_items: (_metadata_items)? "#" _metadata_item
 
 _metadata_item: metadata_id
               | metadata_title
@@ -156,11 +169,11 @@ _scope: global_scope
       | after_until
       | until
 
-global_scope: "globally"
+global_scope: _KW_GLOBALLY
 
-after_until: "after" _activator ["until" _terminator]
+after_until: _KW_AFTER _activator [_KW_UNTIL _terminator]
 
-until: "until" _terminator
+until: _KW_UNTIL _terminator
 
 _activator: _any_event
 
@@ -172,36 +185,34 @@ _pattern: existence
         | prevention
         | requirement
 
-existence: "some" _any_event _time_bound
+existence: _KW_SOME _any_event _time_bound
 
-absence: "no" _any_event _time_bound
+absence: _KW_NO _any_event _time_bound
 
-response: _any_event "causes" _any_event _time_bound
+response: _any_event _KW_CAUSES _any_event _time_bound
 
-prevention: _any_event "forbids" _any_event _time_bound
+prevention: _any_event _KW_FORBIDS _any_event _time_bound
 
-requirement: _any_event "requires" _any_event _time_bound
+requirement: _any_event _KW_REQUIRES _any_event _time_bound
 
-_time_bound: ["within" time_amount]
+_time_bound: [_KW_WITHIN time_amount]
 
 _any_event: event
           | event_disjunction
 
-event: message [predicate]
+event: channel_name [alias] [hpl_predicate]
 
-event_disjunction: "(" (event "or")+ event ")"
-
-message: channel_name [alias]
+event_disjunction: "(" (event _KW_OR)+ event ")"
 
 time_amount: NUMBER TIME_UNIT
 
 frequency: NUMBER FREQ_UNIT
 
-alias: "as" CNAME
+alias: _KW_AS CNAME
 
-predicate: "{" condition "}"
+hpl_predicate: "{" condition "}"
 
-top_level_condition: condition
+hpl_expression: condition
 
 condition: (condition IF_OPERATOR)? disjunction
 
@@ -213,9 +224,9 @@ _logic_expr: negation
            | quantification
            | atomic_condition
 
-negation: NOT_OPERATOR _logic_expr
+negation.5: NOT_OPERATOR _logic_expr
 
-quantification: QUANT_OPERATOR CNAME "in" _atomic_value ":" _logic_expr
+quantification.3: QUANT_OPERATOR CNAME _KW_IN _atomic_value ":" _logic_expr
 
 atomic_condition: expr (RELATIONAL_OPERATOR expr)?
 
@@ -246,7 +257,7 @@ enum_literal: "{" _enum_member "}"
 
 _enum_member: (_enum_member ",")? expr
 
-range_literal: _start_range expr "to" expr _end_range
+range_literal: _start_range expr _KW_TO expr _end_range
 
 _start_range: L_RANGE_EXC | L_RANGE_INC
 
@@ -285,8 +296,7 @@ FALSE: "False"
 RELATIONAL_OPERATOR: EQ_OPERATOR | NEQ_OPERATOR | COMP_OPERATOR | IN_OPERATOR
 EQ_OPERATOR: "="
 NEQ_OPERATOR: "!="
-COMP_OPERATOR: "<" "="?
-             | ">" "="?
+COMP_OPERATOR: /<=?/ | />=?/
 IN_OPERATOR.2: "in"
 
 NOT_OPERATOR.3: "not"
@@ -297,8 +307,8 @@ OR_OPERATOR.3: "or"
 AND_OPERATOR.3: "and"
 
 QUANT_OPERATOR.4: ALL_OPERATOR | SOME_OPERATOR
-ALL_OPERATOR: "forall"
-SOME_OPERATOR: "exists"
+ALL_OPERATOR.4: "forall"
+SOME_OPERATOR.4: "exists"
 
 CONSTANT.5: "PI" | "INF" | "NAN" | "E"
 ADD_OPERATOR: "+" | "-"
@@ -310,6 +320,20 @@ L_RANGE_EXC: "!["
 L_RANGE_INC: "["
 R_RANGE_EXC: "]!"
 R_RANGE_INC: "]"
+
+_KW_TO.4: "to"
+_KW_IN.4: "in"
+_KW_AS.4: "as"
+_KW_OR.4: "or"
+_KW_WITHIN.4: "within"
+_KW_NO.4: "no"
+_KW_SOME.4: "some"
+_KW_REQUIRES.4: "requires"
+_KW_CAUSES.4: "causes"
+_KW_FORBIDS.4: "forbids"
+_KW_AFTER.4: "after"
+_KW_UNTIL.4: "until"
+_KW_GLOBALLY.4: "globally"
 
 CHANNEL_NAME: /[\/~]?[a-zA-Z][0-9a-zA-Z_]*(\/[a-zA-Z][0-9a-zA-Z_]*)*/
 

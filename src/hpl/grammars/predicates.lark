@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright © 2021 André Santos
 
-predicate: "{" condition "}"
+hpl_predicate: "{" condition "}"
 
-top_level_condition: condition
+hpl_expression: condition
 
 condition: (condition IF_OPERATOR)? disjunction
 
@@ -15,9 +15,9 @@ _logic_expr: negation
            | quantification
            | atomic_condition
 
-negation: NOT_OPERATOR _logic_expr
+negation.5: NOT_OPERATOR _logic_expr
 
-quantification: QUANT_OPERATOR CNAME "in" _atomic_value ":" _logic_expr
+quantification.3: QUANT_OPERATOR CNAME _KW_IN _atomic_value ":" _logic_expr
 
 atomic_condition: expr (RELATIONAL_OPERATOR expr)?
 
@@ -48,7 +48,7 @@ enum_literal: "{" _enum_member "}"
 
 _enum_member: (_enum_member ",")? expr
 
-range_literal: _start_range expr "to" expr _end_range
+range_literal: _start_range expr _KW_TO expr _end_range
 
 _start_range: L_RANGE_EXC | L_RANGE_INC
 

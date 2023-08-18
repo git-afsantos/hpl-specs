@@ -8,13 +8,13 @@
 from pytest import raises
 
 from hpl.errors import HplSanityError, HplSyntaxError
-from hpl.parser import predicate_parser
+from hpl.parser import condition_parser
 
 ###############################################################################
 # Test Code
 ###############################################################################
 
-parser = predicate_parser()
+parser = condition_parser()
 
 
 def test_addition_is_not_bool():

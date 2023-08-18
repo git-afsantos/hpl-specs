@@ -39,6 +39,7 @@ from hpl.ast.predicates import (
     HplPredicate,
     HplPredicateExpression,
     HplVacuousTruth,
+    predicate_from_expression,
 )
 from hpl.ast.properties import HplPattern, HplProperty, HplScope, PatternType, ScopeType
 from hpl.ast.specs import HplSpecification

@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from typing import Any, Dict, Iterable, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
 
 from enum import Enum
 import math
@@ -146,22 +146,18 @@ class PropertyTransformer(Transformer):
         else:
             return HplEventDisjunction(children[0], self.event_disjunction(children[1:]))
 
-    def event(self, msg: Tuple[str, Optional[str]], phi: Optional[HplPredicate]) -> HplSimpleEvent:
-        name, alias = msg
+    def event(self, name: str, alias: Optional[str], phi: Optional[HplPredicate]) -> HplSimpleEvent:
         phi = HplVacuousTruth() if phi is None else phi
         return HplSimpleEvent.publish(name, alias=alias, predicate=phi)
-
-    def message(self, name: str, alias: Optional[str]) -> Tuple[str, Optional[str]]:
-        return (name, alias)
 
     def alias(self, name: str) -> str:
         return name
 
-    def predicate(self, expr: HplExpression) -> HplPredicate:
+    def hpl_predicate(self, expr: HplExpression) -> HplPredicate:
         return predicate_from_expression(expr)
 
-    def top_level_condition(self, expr: HplExpression) -> HplPredicate:
-        return predicate_from_expression(expr)
+    def hpl_expression(self, expr: HplExpression) -> HplExpression:
+        return expr
 
     @v_args(inline=False)
     def condition(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
@@ -294,6 +290,7 @@ class PropertyTransformer(Transformer):
 @frozen
 class HplParser:
     _lark: Lark
+    transform: Optional[Callable[[HplAstObject], HplAstObject]] = None
 
     @classmethod
     def from_grammar(
@@ -301,6 +298,7 @@ class HplParser:
         grammar: str,
         start: str = 'hpl_file',
         *,
+        transform: Optional[Callable[[HplAstObject], HplAstObject]] = None,
         debug: bool = False,
     ) -> 'HplParser':
         return cls(
@@ -311,14 +309,16 @@ class HplParser:
                 transformer=PropertyTransformer(),
                 maybe_placeholders=True,
                 debug=debug,
-            )
+            ),
+            transform=transform,
         )
 
     def parse(self, text: str) -> HplAstObject:
         try:
-            return self._lark.parse(text)
+            result: HplAstObject = self._lark.parse(text)
         except (UnexpectedToken, UnexpectedCharacters, SyntaxError) as e:
             raise HplSyntaxError.from_lark(e)
+        return result if self.transform is None else self.transform(result)
 
     @classmethod
     def specification_parser(cls, *, debug: bool = False) -> 'HplParser':
@@ -330,7 +330,20 @@ class HplParser:
 
     @classmethod
     def predicate_parser(cls, *, debug: bool = False) -> 'HplParser':
-        return cls.from_grammar(PREDICATE_GRAMMAR, start='top_level_condition', debug=debug)
+        return cls.from_grammar(PREDICATE_GRAMMAR, start='hpl_predicate', debug=debug)
+
+    @classmethod
+    def condition_parser(cls, *, debug: bool = False) -> 'HplParser':
+        return cls.from_grammar(
+            PREDICATE_GRAMMAR,
+            start='hpl_expression',
+            debug=debug,
+            transform=predicate_from_expression,
+        )
+
+    @classmethod
+    def expression_parser(cls, *, debug: bool = False) -> 'HplParser':
+        return cls.from_grammar(PREDICATE_GRAMMAR, start='hpl_expression', debug=debug)
 
 
 def specification_parser(debug: bool = False) -> HplParser:
@@ -345,6 +358,14 @@ def predicate_parser(debug: bool = False) -> HplParser:
     return HplParser.predicate_parser(debug=debug)
 
 
+def condition_parser(debug: bool = False) -> HplParser:
+    return HplParser.condition_parser(debug=debug)
+
+
+def expression_parser(debug: bool = False) -> HplParser:
+    return HplParser.expression_parser(debug=debug)
+
+
 def parse_specification(hpl_text: str) -> HplSpecification:
     return specification_parser().parse(hpl_text)
 
@@ -355,3 +376,11 @@ def parse_property(hpl_text: str) -> HplProperty:
 
 def parse_predicate(hpl_text: str) -> HplPredicate:
     return predicate_parser().parse(hpl_text)
+
+
+def parse_condition(hpl_text: str) -> HplPredicate:
+    return condition_parser().parse(hpl_text)
+
+
+def parse_expresion(hpl_text: str) -> HplExpression:
+    return expression_parser().parse(hpl_text)

@@ -42,10 +42,33 @@ g_files = skip_preamble(path.read_text(encoding='utf8'))
 
 def get_keyword_list(token_grammar: str) -> str:
     token_map = {}
-    for groups in re.findall(r'(\w+_OPERATOR)(?:\.\d+)?\s*:\s*"(\w+?)"', token_grammar):
+    pattern = r'(\w+_OPERATOR)(?:\.\d+)?\s*:\s*"(\w+?)"'
+    for groups in re.findall(pattern, token_grammar):
+        var, token = groups
+        token_map[var] = token
+    pattern = r'(\w+_OPERATOR)(?:\.\d+)?\s*:\s*/(?:\\b)?(\w+?)(?:\\b)?/'
+    for groups in re.findall(pattern, token_grammar):
         var, token = groups
         token_map[var] = token
     return '\n'.join(f"{key} = '{value}'" for key, value in token_map.items())
+
+
+# def distorted_tokens(token_grammar: str) -> str:
+#     def repl(m: re.Match) -> str:
+#         return f'{m.group(1)}: " {m.group(2)} "'
+# 
+#     pattern = r'^(\w+(?:\.\d+)?)\s*:\s*"(\w+?)"$'
+#     g = re.sub(pattern, repl, token_grammar, flags=re.M)
+#     pattern = r'^(\w+(?:\.\d+)?)\s*:\s*/\\b(\w+?)\\b/$'
+#     return re.sub(pattern, repl, g, flags=re.M)
+
+
+def distorted_tokens(token_grammar: str) -> str:
+    def repl(m: re.Match) -> str:
+        return f'" {m.group(1)} "'
+
+    pattern = r'(?:"|/\\b)(\w+?)(?:"|\\b/)'
+    return re.sub(pattern, repl, token_grammar)
 
 
 GRAMMAR_PY = f'''\
@@ -69,3 +92,19 @@ HPL_GRAMMAR = r"""
 
 path = PKG / 'grammar.py'
 path.write_text(GRAMMAR_PY, encoding='utf8')
+
+
+TEST_GRAMMAR_PY = f'''\
+# SPDX-License-Identifier: MIT
+# Copyright © 2023 André Santos
+
+HPL_GRAMMAR = r"""
+{g_files}
+{g_properties}
+{g_predicates}
+{distorted_tokens(g_tokens)}
+"""
+'''
+
+path = HERE.parent / 'tests' / 'grammar.py'
+path.write_text(TEST_GRAMMAR_PY, encoding='utf8')

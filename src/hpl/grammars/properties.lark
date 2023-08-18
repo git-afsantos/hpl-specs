@@ -21,11 +21,11 @@ _scope: global_scope
       | after_until
       | until
 
-global_scope: "globally"
+global_scope: _KW_GLOBALLY
 
-after_until: "after" _activator ["until" _terminator]
+after_until: _KW_AFTER _activator [_KW_UNTIL _terminator]
 
-until: "until" _terminator
+until: _KW_UNTIL _terminator
 
 _activator: _any_event
 
@@ -37,29 +37,27 @@ _pattern: existence
         | prevention
         | requirement
 
-existence: "some" _any_event _time_bound
+existence: _KW_SOME _any_event _time_bound
 
-absence: "no" _any_event _time_bound
+absence: _KW_NO _any_event _time_bound
 
-response: _any_event "causes" _any_event _time_bound
+response: _any_event _KW_CAUSES _any_event _time_bound
 
-prevention: _any_event "forbids" _any_event _time_bound
+prevention: _any_event _KW_FORBIDS _any_event _time_bound
 
-requirement: _any_event "requires" _any_event _time_bound
+requirement: _any_event _KW_REQUIRES _any_event _time_bound
 
-_time_bound: ["within" time_amount]
+_time_bound: [_KW_WITHIN time_amount]
 
 _any_event: event
           | event_disjunction
 
-event: message [predicate]
+event: channel_name [alias] [hpl_predicate]
 
-event_disjunction: "(" (event "or")+ event ")"
-
-message: channel_name [alias]
+event_disjunction: "(" (event _KW_OR)+ event ")"
 
 time_amount: NUMBER TIME_UNIT
 
 frequency: NUMBER FREQ_UNIT
 
-alias: "as" CNAME
+alias: _KW_AS CNAME
