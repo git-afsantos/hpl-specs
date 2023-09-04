@@ -7,6 +7,7 @@
 
 from pytest import raises
 
+from hpl.ast.predicates import HplPredicateExpression
 from hpl.errors import HplSanityError, HplSyntaxError
 from hpl.parser import condition_parser
 
@@ -96,14 +97,11 @@ def test_all_eq_refs_have_same_type():
         parser.parse('exists x in xs: (a[@x] implies @x)')
 
 
-def test_no_unknown_refs():
-    with raises(HplSanityError):
-        parser.parse('@a < 3')
-
-
 def test_at_least_one_self_ref():
     with raises(HplSanityError):
-        parser.parse('---42 = -42')
+        p = parser.parse('---42 = -42')
+        assert isinstance(p, HplPredicateExpression)
+        p.check_some_self_references()
 
 
 def test_unknown_function():

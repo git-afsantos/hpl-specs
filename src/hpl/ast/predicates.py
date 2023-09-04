@@ -93,18 +93,9 @@ class HplPredicateExpression(HplPredicate):
     def _check_expression(self, _attribute, expr: HplExpression):
         if not expr.can_be_bool:
             raise TypeError(f'not a boolean expression: {{{expr}}}')
-        ref_table = {}
-        for obj in expr.iterate():
-            assert isinstance(obj, HplExpression)
-            if obj.is_accessor or (obj.is_value and obj.is_variable):
-                key = str(obj)
-                refs = ref_table.get(key)
-                if refs is None:
-                    refs = []
-                    ref_table[key] = refs
-                refs.append(obj)
+        ref_table = _get_reference_table(expr)
         self._all_refs_same_type(ref_table)
-        self._some_field_refs(ref_table)
+        # self._some_field_refs(ref_table)
 
     def _all_refs_same_type(self, table: Dict[str, List[HplExpression]]):
         # All references to the same field/variable have the same type.
@@ -116,6 +107,10 @@ class HplPredicateExpression(HplPredicate):
                 final_type = ref.data_type.cast(final_type)
             for ref in reversed(ref_group):
                 final_type = ref.data_type.cast(final_type)
+
+    def check_some_self_references(self):
+        ref_table = _get_reference_table(self.expression)
+        self._some_field_refs(ref_table)
 
     def _some_field_refs(self, table: Dict[str, List[HplExpression]]):
         # There is at least one reference to a field (own).
@@ -281,6 +276,20 @@ class HplContradiction(HplPredicate):
 ###############################################################################
 # Helper Functions
 ###############################################################################
+
+
+def _get_reference_table(expr: HplExpression) -> Dict[str, List[HplExpression]]:
+    ref_table = {}
+    for obj in expr.iterate():
+        assert isinstance(obj, HplExpression)
+        if obj.is_accessor or (obj.is_value and obj.is_variable):
+            key = str(obj)
+            refs = ref_table.get(key)
+            if refs is None:
+                refs = []
+                ref_table[key] = refs
+            refs.append(obj)
+    return ref_table
 
 
 def predicate_from_expression(expr: HplExpression) -> HplPredicate:
