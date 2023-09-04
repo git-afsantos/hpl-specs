@@ -68,7 +68,7 @@ class NumberConstants(Enum):
 class PropertyTransformer(Transformer):
     @v_args(inline=False)
     def hpl_file(self, children: Iterable[HplProperty]) -> HplSpecification:
-        return HplSpecification(children)
+        return HplSpecification(tuple(children))
 
     def hpl_property(
         self,
