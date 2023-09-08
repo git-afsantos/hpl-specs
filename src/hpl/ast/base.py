@@ -59,6 +59,11 @@ class HplAstObject:
     def but(self, **kwargs) -> 'HplAstObject':
         metadata = kwargs.get('metadata')
         if metadata is None:
+            for key, value in kwargs.items():
+                if getattr(self, key) is not value:
+                    break
+            else:
+                return self  # nothing changes
             metadata = dict(self.metadata)
         new = evolve(self, **kwargs)
         assert new.metadata is not self.metadata
