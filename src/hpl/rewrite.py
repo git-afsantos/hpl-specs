@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from typing import Tuple, TypeVar, Union
+from typing import List, Tuple, TypeVar, Union
 
 from hpl.ast.expressions import (
     And,
@@ -24,6 +24,7 @@ from hpl.ast.expressions import (
     is_var_reference,
 )
 from hpl.ast.predicates import HplPredicate, HplVacuousTruth, predicate_from_expression
+from hpl.ast.properties import HplProperty, HplScope
 from hpl.errors import invalid_type
 
 ###############################################################################
@@ -70,6 +71,13 @@ def refactor_reference(predicate_or_expression: P, alias: str) -> Tuple[P, P]:
         return _refactor_ref_pred(predicate_or_expression, alias)
     else:
         return _refactor_ref_expr(predicate_or_expression, alias)
+
+
+def canonical_form(property: HplProperty) -> List[HplProperty]:
+    if property.pattern.is_safety:
+        return _canonical_form_safety(property)
+    assert property.pattern.is_liveness
+    return _canonical_form_liveness(property)
 
 
 ###############################################################################
@@ -201,6 +209,39 @@ def _split_negation(neg: HplUnaryOperator, alias: str) -> Tuple[HplExpression, H
         # cannot split into two parts
         return (true(), neg)
     raise TypeError(f'unknown expression type: {expr!r}')
+
+
+def _canonical_form_safety(property: HplProperty) -> List[HplProperty]:
+    scopes = _canonical_form_scopes(property.scope)
+    pattern = property.pattern
+    patterns = [pattern.but(behaviour=event) for event in pattern.behaviour.simple_events()]
+    if len(scopes) == 1 and len(patterns) == 1:
+        # nothing changed
+        return [property]
+    return [property.but(scope=scope, pattern=pattern) for scope in scopes for pattern in patterns]
+
+
+def _canonical_form_liveness(property: HplProperty) -> List[HplProperty]:
+    scopes = _canonical_form_scopes(property.scope)
+    if property.pattern.is_existence:
+        patterns = [property.pattern]  # no splits
+    else:
+        assert property.pattern.is_response, f'pattern: {property.pattern}'
+        trigger = property.pattern.trigger
+        assert trigger is not None
+        patterns = [property.pattern.but(trigger=event) for event in trigger.simple_events()]
+    if len(scopes) == 1 and len(patterns) == 1:
+        # nothing changed
+        return [property]
+    return [property.but(scope=scope, pattern=pattern) for scope in scopes for pattern in patterns]
+
+
+def _canonical_form_scopes(scope: HplScope) -> List[HplScope]:
+    if scope.is_after:  # after or after-until
+        assert scope.activator is not None
+        return [scope.but(activator=event) for event in scope.activator.simple_events()]
+    assert scope.is_global or scope.is_until
+    return [scope]
 
 
 ###############################################################################

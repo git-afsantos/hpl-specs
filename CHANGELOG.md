@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## v1.2.0 - 2023-09-08
 ### Added
+- `canonical_form(property: HplProperty)` function to `hpl.rewrite` module.
 
 ### Changed
 - `HplAstObject.but()` returns the same object if no attributes would change.
