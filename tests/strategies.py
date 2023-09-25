@@ -50,7 +50,7 @@ def number_literals() -> SearchStrategy[str]:
     return one_of(ints, decs).map(str)
 
 def _apply_quotes(s: str) -> str:
-    s = s.replace('"', '\\"')
+    s = s.replace('"', '\\"').replace('\n', '\\n')
     return f'"{s}"'
 
 
