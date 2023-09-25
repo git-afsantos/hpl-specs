@@ -8,7 +8,13 @@
 from hpl.ast.expressions import HplExpression
 from hpl.ast.predicates import HplPredicate
 from hpl.parser import condition_parser
-from hpl.rewrite import is_true, refactor_reference, replace_this_with_var, replace_var_with_this
+from hpl.rewrite import (
+    is_true,
+    refactor_reference,
+    replace_this_with_var,
+    replace_var_with_this,
+    split_and,
+)
 
 ###############################################################################
 # Predicate Examples
@@ -116,3 +122,55 @@ def test_replace_this_msg_with_splits():
         assert not is_true(psi)
         replace_this_with_var(psi, 'A')
         replace_var_with_this(psi, 'B')
+
+
+def test_split_conjunction_but_no_splits():
+    examples = [
+        'a + b < c',  # atomic
+        'forall x in xs: @x',  # atomic
+        'not a + b < c',  # atomic
+        'f.int in [0 to 10]',  # atomic
+        'not array[0] in {0, 1, 2}',  # atomic
+        'exists x in xs: @B.x < @x',  # existential quantifier
+        'forall x in xs: (@x or @B.x)',  # disjunction
+        'forall x in xs: (@x implies @B.x)',  # implication
+        'forall x in xs: (@x iff @B.x)',  # equivalence
+        'forall x in xs: (not @B.x = @x)',  # negation
+        'not forall x in xs: (@x and @B.x)',  # negated universal quantifier
+        'not exists x in xs: (@x and @B.x)',  # negated conjunction
+        'not (x and @B.x)',  # negated conjunction
+        'x or @B.x',  # disjunction
+        'x implies @B.x',  # implication
+        'x iff @B.x',  # equivalence
+    ]
+    for test_str in examples:
+        predicate: HplPredicate = parser.parse(test_str)
+        conditions = split_and(predicate.condition)
+        assert isinstance(conditions, list)
+        assert len(conditions) == 1
+        phi = conditions[0]
+        assert isinstance(phi, HplExpression)
+        # expression must be equivalent, but not exactly equal
+        # assert phi == predicate.condition
+
+
+def test_split_conjunction_with_splits():
+    examples = [
+        'x < 0 and y > 0',  # conjunction
+        'not (x < 0 or y > 0)',  # negated disjunction
+        'not (x < 0 implies y > 0)',  # negated implication
+        'not exists x in xs: (@x or @B.x)',  # negated existential
+        'forall x in xs: (0 < @x and 2 > @x)',  # universal quantifier
+        'forall x in xs: not (0 < @x or 2 > @x)',  # universal quantifier
+        'forall x in xs: not (0 < @x implies 2 > @x)',  # universal quantifier
+        'forall x in xs: forall y in ys: (@x < 0 and @y > 0)',  # nested universal
+        'forall x in xs: forall y in ys: not (@x < 0 or @y > 0)',  # nested universal
+    ]
+    for test_str in examples:
+        predicate: HplPredicate = parser.parse(test_str)
+        conditions = split_and(predicate.condition)
+        assert isinstance(conditions, list)
+        assert len(conditions) > 1
+        for phi in conditions:
+            assert isinstance(phi, HplExpression)
+            assert phi != predicate.condition

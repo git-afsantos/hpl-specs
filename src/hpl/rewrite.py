@@ -7,6 +7,8 @@
 
 from typing import List, Tuple, TypeVar, Union
 
+from typeguard import typechecked
+
 from hpl.ast.expressions import (
     And,
     Forall,
@@ -25,7 +27,6 @@ from hpl.ast.expressions import (
 )
 from hpl.ast.predicates import HplPredicate, HplVacuousTruth, predicate_from_expression
 from hpl.ast.properties import HplProperty, HplScope
-from hpl.errors import invalid_type
 
 ###############################################################################
 # Constants
@@ -38,11 +39,8 @@ P = TypeVar('P', HplPredicate, HplExpression)
 ###############################################################################
 
 
+@typechecked
 def replace_this_with_var(predicate_or_expression: P, alias: str) -> P:
-    if not predicate_or_expression.is_predicate and not predicate_or_expression.is_expression:
-        raise invalid_type('HplPredicate or HplExpression', predicate_or_expression)
-    if not isinstance(alias, str):
-        raise invalid_type('string', alias)
     var = HplVarReference(f'@{alias}')
     if predicate_or_expression.is_expression:
         if is_self_reference(predicate_or_expression):
@@ -50,11 +48,8 @@ def replace_this_with_var(predicate_or_expression: P, alias: str) -> P:
     return predicate_or_expression.replace_self_reference(var)
 
 
+@typechecked
 def replace_var_with_this(predicate_or_expression: P, alias: str) -> P:
-    if not predicate_or_expression.is_predicate and not predicate_or_expression.is_expression:
-        raise invalid_type('HplPredicate or HplExpression', predicate_or_expression)
-    if not isinstance(alias, str):
-        raise invalid_type('string', alias)
     this = HplThisMessage()
     if predicate_or_expression.is_expression:
         if is_var_reference(predicate_or_expression, alias=alias):
@@ -62,17 +57,15 @@ def replace_var_with_this(predicate_or_expression: P, alias: str) -> P:
     return predicate_or_expression.replace_var_reference(alias, this)
 
 
+@typechecked
 def refactor_reference(predicate_or_expression: P, alias: str) -> Tuple[P, P]:
-    if not predicate_or_expression.is_predicate and not predicate_or_expression.is_expression:
-        raise invalid_type('HplPredicate or HplExpression', predicate_or_expression)
-    if not isinstance(alias, str):
-        raise invalid_type('string', alias)
     if predicate_or_expression.is_predicate:
         return _refactor_ref_pred(predicate_or_expression, alias)
     else:
         return _refactor_ref_expr(predicate_or_expression, alias)
 
 
+@typechecked
 def canonical_form(property: HplProperty) -> List[HplProperty]:
     if property.pattern.is_safety:
         return _canonical_form_safety(property)
@@ -80,11 +73,21 @@ def canonical_form(property: HplProperty) -> List[HplProperty]:
     return _canonical_form_liveness(property)
 
 
+@typechecked
+def split_and(predicate_or_expression: P) -> List[HplExpression]:
+    if predicate_or_expression.is_predicate:
+        assert isinstance(predicate_or_expression, HplPredicate)
+        return _split_and_expr(predicate_or_expression.condition)
+    assert isinstance(predicate_or_expression, HplExpression)
+    return _split_and_expr(predicate_or_expression)
+
+
 ###############################################################################
 # Formula Rewriting - Helper Functions
 ###############################################################################
 
 
+@typechecked
 def _refactor_ref_pred(phi: HplPredicate, alias: str) -> Tuple[HplPredicate, HplPredicate]:
     if phi.is_vacuous:
         return (phi, HplVacuousTruth())
@@ -92,6 +95,7 @@ def _refactor_ref_pred(phi: HplPredicate, alias: str) -> Tuple[HplPredicate, Hpl
     return (predicate_from_expression(expr1), predicate_from_expression(expr2))
 
 
+@typechecked
 def _refactor_ref_expr(expr: HplExpression, alias: str) -> Tuple[HplExpression, HplExpression]:
     if not expr.contains_reference(alias):
         return (expr, true())
@@ -102,13 +106,14 @@ def _refactor_ref_expr(expr: HplExpression, alias: str) -> Tuple[HplExpression, 
         # cannot split into two parts
         return (true(), expr)
     if expr.is_quantifier:
-        return _split_quantifier(expr, alias)
+        return _split_ref_quantifier(expr, alias)
     if expr.is_operator:
-        return _split_operator(expr, alias)
+        return _split_ref_operator(expr, alias)
     raise TypeError(f'unknown expression type: {expr!r}')
 
 
-def _split_quantifier(quant: HplQuantifier, alias: str) -> Tuple[HplExpression, HplExpression]:
+@typechecked
+def _split_ref_quantifier(quant: HplQuantifier, alias: str) -> Tuple[HplExpression, HplExpression]:
     var = quant.variable
     if quant.domain.contains_reference(alias):
         # move the whole expression
@@ -156,13 +161,14 @@ def _split_quantifier(quant: HplQuantifier, alias: str) -> Tuple[HplExpression, 
     raise TypeError(f'unknown quantifier type: {quant!r}')
 
 
-def _split_operator(
+@typechecked
+def _split_ref_operator(
     op: Union[HplUnaryOperator, HplBinaryOperator], alias: str
 ) -> Tuple[HplExpression, HplExpression]:
     if op.arity == 1:
         assert isinstance(op, HplUnaryOperator)
         assert op.operator.is_not
-        return _split_negation(op, alias)
+        return _split_ref_negation(op, alias)
     else:
         assert op.arity == 2
         assert isinstance(op, HplBinaryOperator)
@@ -178,7 +184,8 @@ def _split_operator(
         return (true(), op)
 
 
-def _split_negation(neg: HplUnaryOperator, alias: str) -> Tuple[HplExpression, HplExpression]:
+@typechecked
+def _split_ref_negation(neg: HplUnaryOperator, alias: str) -> Tuple[HplExpression, HplExpression]:
     expr = neg.operand
     assert expr.can_be_bool and expr.contains_reference(alias)
     if expr.is_value or expr.is_accessor or expr.is_function_call:
@@ -191,7 +198,7 @@ def _split_negation(neg: HplUnaryOperator, alias: str) -> Tuple[HplExpression, H
             p = Not(expr.condition)
             assert p.contains_reference(expr.variable)
             expr = Forall(expr.variable, expr.domain, p)
-            return _split_quantifier(expr, alias)
+            return _split_ref_quantifier(expr, alias)
         # TODO optimize for other (harder) cases
         return (true(), neg)
     if expr.is_operator:
@@ -201,16 +208,17 @@ def _split_negation(neg: HplUnaryOperator, alias: str) -> Tuple[HplExpression, H
         if is_implies(expr):
             # ~(a -> b)  ==  ~(~a | b)  ==  a & ~b
             expr = And(expr.a, Not(expr.b))
-            return _split_operator(expr, alias)
+            return _split_ref_operator(expr, alias)
         if is_or(expr):
             # ~(a | b)  ==  ~a & ~b
             expr = And(Not(expr.a), Not(expr.b))
-            return _split_operator(expr, alias)
+            return _split_ref_operator(expr, alias)
         # cannot split into two parts
         return (true(), neg)
     raise TypeError(f'unknown expression type: {expr!r}')
 
 
+@typechecked
 def _canonical_form_safety(property: HplProperty) -> List[HplProperty]:
     scopes = _canonical_form_scopes(property.scope)
     pattern = property.pattern
@@ -221,6 +229,7 @@ def _canonical_form_safety(property: HplProperty) -> List[HplProperty]:
     return [property.but(scope=scope, pattern=pattern) for scope in scopes for pattern in patterns]
 
 
+@typechecked
 def _canonical_form_liveness(property: HplProperty) -> List[HplProperty]:
     scopes = _canonical_form_scopes(property.scope)
     if property.pattern.is_existence:
@@ -236,12 +245,110 @@ def _canonical_form_liveness(property: HplProperty) -> List[HplProperty]:
     return [property.but(scope=scope, pattern=pattern) for scope in scopes for pattern in patterns]
 
 
+@typechecked
 def _canonical_form_scopes(scope: HplScope) -> List[HplScope]:
     if scope.is_after:  # after or after-until
         assert scope.activator is not None
         return [scope.but(activator=event) for event in scope.activator.simple_events()]
     assert scope.is_global or scope.is_until
     return [scope]
+
+
+@typechecked
+def _split_and_expr(phi: HplExpression) -> List[HplExpression]:
+    conditions: List[HplExpression] = []
+    stack: List[HplExpression] = [phi]
+    while stack:
+        expr: HplExpression = stack.pop()
+        # preprocessing
+        if is_true(expr):
+            continue
+        if is_false(expr):
+            raise ValueError(f'unsatisfiable: {phi}')
+        expr = _and_presplit_transform(expr)
+        # expr should be either an And or something undivisible
+        # splits
+        if is_and(expr):
+            assert isinstance(expr, HplBinaryOperator)
+            stack.append(expr.a)
+            stack.append(expr.b)
+        else:
+            conditions.append(expr)
+    return conditions
+
+
+@typechecked
+def _and_presplit_transform(phi: HplExpression) -> HplExpression:
+    # This should not need a loop any longer
+    # previous = None
+    # while phi is not previous:
+    #     previous = phi
+    #     if is_not(phi):
+    #         phi = _split_and_not(phi)
+    #     elif phi.is_quantifier:
+    #         phi = _split_and_quantifier(phi)
+
+    if is_not(phi):
+        return _split_and_not(phi)
+    if phi.is_quantifier:
+        return _split_and_quantifier(phi)
+    return phi  # atomic
+
+
+@typechecked
+def _split_and_not(neg: HplUnaryOperator) -> HplExpression:
+    """
+    Transform a Negation into either an And or something undivisible
+    """
+    phi: HplExpression = neg.operand
+    if is_not(phi):
+        # ~~p  ==  p
+        assert isinstance(phi, HplUnaryOperator)
+        return _and_presplit_transform(phi.operand)
+    if is_or(phi):
+        # ~(a | b)  ==  ~a & ~b
+        assert isinstance(phi, HplBinaryOperator)
+        return And(Not(phi.a), Not(phi.b))
+    if is_implies(phi):
+        # ~(a -> b)  ==  ~(~a | b)  ==  a & ~b
+        return And(phi.a, Not(phi.b))
+    if phi.is_quantifier:
+        assert isinstance(phi, HplQuantifier)
+        if phi.is_existential:
+            # (~E x: p)  ==  (A x: ~p)
+            p = Not(phi.condition)
+            assert p.contains_reference(phi.variable)
+            phi = Forall(phi.variable, phi.domain, p)
+            return _split_and_quantifier(phi)
+    return neg
+
+
+@typechecked
+def _split_and_quantifier(quant: HplQuantifier) -> HplExpression:
+    """
+    Transform a Quantifier into either an And or something undivisible
+    """
+    var: str = quant.variable
+    phi: HplExpression = quant.condition
+    if quant.is_universal:
+        # (A x: p & q)  ==  ((A x: p) & (A x: q))
+        phi = _and_presplit_transform(phi)
+        if is_and(phi):
+            assert isinstance(phi, HplBinaryOperator)
+            if phi.a.contains_reference(var):
+                qa = Forall(var, quant.domain, phi.a)
+            else:
+                qa = Or(empty_test(quant.domain), phi.a)
+            if phi.b.contains_reference(var):
+                qb = Forall(var, quant.domain, phi.b)
+            else:
+                qb = Or(empty_test(quant.domain), phi.b)
+            return And(qa, qb)
+    elif quant.is_existential:
+        # (E x: p -> q)  ==  (E x: ~p | q)
+        # (E x: p | q)  ==  ((E x: p) | (E x: q))
+        pass  # not worth splitting disjunctions
+    return quant  # nothing to do
 
 
 ###############################################################################
