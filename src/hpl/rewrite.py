@@ -11,6 +11,7 @@ from typeguard import typechecked
 
 from hpl.ast.expressions import (
     And,
+    BinaryOperatorDefinition,
     Forall,
     HplBinaryOperator,
     HplExpression,
@@ -20,12 +21,19 @@ from hpl.ast.expressions import (
     HplThisMessage,
     HplUnaryOperator,
     HplVarReference,
+    Implies,
     Not,
     Or,
     is_self_reference,
     is_var_reference,
 )
-from hpl.ast.predicates import HplPredicate, HplVacuousTruth, predicate_from_expression
+from hpl.ast.predicates import (
+    HplContradiction,
+    HplPredicate,
+    HplPredicateExpression,
+    HplVacuousTruth,
+    predicate_from_expression,
+)
 from hpl.ast.properties import HplProperty, HplScope
 
 ###############################################################################
@@ -73,13 +81,29 @@ def canonical_form(property: HplProperty) -> List[HplProperty]:
     return _canonical_form_liveness(property)
 
 
-@typechecked
+@typechecked.
 def split_and(predicate_or_expression: P) -> List[HplExpression]:
     if predicate_or_expression.is_predicate:
         assert isinstance(predicate_or_expression, HplPredicate)
         return _split_and_expr(predicate_or_expression.condition)
     assert isinstance(predicate_or_expression, HplExpression)
     return _split_and_expr(predicate_or_expression)
+
+
+@typechecked
+def simplify(predicate_or_expression: P) -> P:
+    if predicate_or_expression.is_predicate:
+        assert isinstance(predicate_or_expression, HplPredicate)
+        if predicate_or_expression.is_vacuous:
+            return predicate_or_expression
+        expr: HplExpression = _simplify(predicate_or_expression.condition)
+        if is_true(expr):
+            return HplVacuousTruth()
+        if is_false(expr):
+            return HplContradiction()
+        return HplPredicateExpression(expr)
+    assert isinstance(predicate_or_expression, HplExpression)
+    return _simplify(predicate_or_expression)
 
 
 ###############################################################################
@@ -351,6 +375,53 @@ def _split_and_quantifier(quant: HplQuantifier) -> HplExpression:
     return quant  # nothing to do
 
 
+@typechecked
+def _simplify(phi: HplExpression) -> HplExpression:
+    if is_not(phi):
+        # ~~p  ==  p
+        assert isinstance(phi, HplUnaryOperator)
+        psi: HplExpression = phi.operand
+        if is_not(psi):
+            assert isinstance(psi, HplUnaryOperator)
+            return _simplify(psi.operand)
+
+    elif is_iff(phi):
+        # (p == q) == ((p -> q) & (q -> p))
+        assert isinstance(phi, HplBinaryOperator)
+        p: HplExpression = _simplify(Implies(phi.operand1, phi.operand2))
+        q: HplExpression = _simplify(Implies(phi.operand2, phi.operand1))
+        return And(p, q)
+
+    elif is_implies(phi):
+        # p -> q == ~p | q
+        assert isinstance(phi, HplBinaryOperator)
+        return Or(Not(phi.operand1), phi.operand2)
+
+    elif is_and(phi):
+        assert isinstance(phi, HplBinaryOperator)
+        p: HplExpression = _simplify(phi.operand1)
+        q: HplExpression = _simplify(phi.operand2)
+        return phi if p is phi.operand1 and q is phi.operand2 else And(p, q)
+
+    elif is_or(phi):
+        assert isinstance(phi, HplBinaryOperator)
+        p: HplExpression = _simplify(phi.operand1)
+        q: HplExpression = _simplify(phi.operand2)
+        return phi if p is phi.operand1 and q is phi.operand2 else Or(p, q)
+
+    elif is_comparison(phi):
+        assert isinstance(phi, HplBinaryOperator)
+        if is_self_or_field(phi.operand2) and not is_self_or_field(phi.operand1):
+            if phi.operator.commutative:
+                return phi.but(operand1=phi.operand2, operand2=phi.operand1)
+            op: BinaryOperatorDefinition = inverse_operator(phi.operator)
+            return HplBinaryOperator(op, phi.operand2, phi.operand1)
+
+    # if is_true(phi) or is_false(phi):
+    #     return phi
+    return phi
+
+
 ###############################################################################
 # Convenience Logic Tests
 ###############################################################################
@@ -376,6 +447,14 @@ def is_iff(expr: HplExpression) -> bool:
     return expr.is_operator and expr.arity == 2 and expr.operator.is_iff
 
 
+def is_inclusion(expr: HplExpression) -> bool:
+    return expr.is_operator and expr.arity == 2 and expr.operator.is_inclusion
+
+
+def is_comparison(expr: HplExpression) -> bool:
+    return expr.is_operator and expr.arity == 2 and expr.operator.is_comparison
+
+
 def is_true(expr: HplExpression) -> bool:
     return expr.is_value and expr.is_literal and expr.value is True
 
@@ -384,10 +463,32 @@ def is_false(expr: HplExpression) -> bool:
     return expr.is_value and expr.is_literal and expr.value is False
 
 
+def is_self_or_field(expr: HplExpression) -> bool:
+    if is_self_reference(expr):
+        return True
+    if expr.is_accessor and is_self_reference(expr.object):
+        return True
+    return False
+
+
 def empty_test(expr: HplExpression) -> HplBinaryOperator:
     a = HplFunctionCall('len', (expr,))
     b = HplLiteral('0', 0)
     return HplBinaryOperator('=', a, b)
+
+
+def inverse_operator(op: BinaryOperatorDefinition) -> BinaryOperatorDefinition:
+    if op.commutative:
+        return op
+    if op.is_less_than:
+        return BinaryOperatorDefinition.greater_than_eq()
+    if op.is_less_than_eq:
+        return BinaryOperatorDefinition.greater_than()
+    if op.is_greater_than:
+        return BinaryOperatorDefinition.less_than_eq()
+    if op.is_greater_than_eq:
+        return BinaryOperatorDefinition.less_than()
+    raise ValueError(f'operator {op!r} does not have an inverse')
 
 
 def true() -> HplLiteral:

@@ -903,6 +903,38 @@ class BinaryOperatorDefinition:
         return self.token == '/'
 
     @property
+    def is_inclusion(self) -> bool:
+        return self.token == IN_OPERATOR
+
+    @property
+    def is_comparison(self) -> bool:
+        return self.token in ('=', '!=', '<', '<=', '>', '>=')
+
+    @property
+    def is_equality(self) -> bool:
+        return self.token == '='
+
+    @property
+    def is_inequality(self) -> bool:
+        return self.token == '!='
+
+    @property
+    def is_less_than(self) -> bool:
+        return self.token == '<'
+
+    @property
+    def is_less_than_eq(self) -> bool:
+        return self.token == '<='
+
+    @property
+    def is_greater_than(self) -> bool:
+        return self.token == '>'
+
+    @property
+    def is_greater_than_eq(self) -> bool:
+        return self.token == '>='
+
+    @property
     def is_and(self) -> bool:
         return self.token == AND_OPERATOR
 
