@@ -81,7 +81,7 @@ def canonical_form(property: HplProperty) -> List[HplProperty]:
     return _canonical_form_liveness(property)
 
 
-@typechecked.
+@typechecked
 def split_and(predicate_or_expression: P) -> List[HplExpression]:
     if predicate_or_expression.is_predicate:
         assert isinstance(predicate_or_expression, HplPredicate)
