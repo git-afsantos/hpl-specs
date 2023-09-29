@@ -8,7 +8,7 @@
 from typing import Dict, List, Mapping, Optional, Set, Tuple
 
 from attrs import field, frozen
-from attrs.validators import instance_of
+from typeguard import typechecked
 
 from hpl.ast.base import HplAstObject
 from hpl.ast.expressions import (
@@ -85,9 +85,14 @@ class HplPredicate(HplAstObject):
 ###############################################################################
 
 
+@typechecked
+def _cast_expr_to_bool(expr: HplExpression) -> HplExpression:
+    return expr.cast(DataType.BOOL)
+
+
 @frozen
 class HplPredicateExpression(HplPredicate):
-    expression: HplExpression = field(validator=instance_of(HplExpression))
+    expression: HplExpression = field(converter=_cast_expr_to_bool)
 
     @expression.validator
     def _check_expression(self, _attribute, expr: HplExpression):

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `simplify(p: HplPredicate | HplExpression)` function to `hpl.rewrite` module.
 - `is_inclusion` and `is_comparison` properties to `BinaryOperatorDefinition`.
 
+### Fixed
+- `HplPredicateExpression.expression` is now cast to `DataType.BOOL` on construction.
+
 ## v1.2.0 - 2023-09-08
 ### Added
 - `canonical_form(property: HplProperty)` function to `hpl.rewrite` module.
