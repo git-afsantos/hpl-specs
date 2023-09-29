@@ -543,13 +543,13 @@ def inverse_operator(op: BinaryOperatorDefinition) -> BinaryOperatorDefinition:
     if op.commutative:
         return op
     if op.is_less_than:
-        return BinaryOperatorDefinition.greater_than_eq()
-    if op.is_less_than_eq:
         return BinaryOperatorDefinition.greater_than()
+    if op.is_less_than_eq:
+        return BinaryOperatorDefinition.greater_than_eq()
     if op.is_greater_than:
-        return BinaryOperatorDefinition.less_than_eq()
-    if op.is_greater_than_eq:
         return BinaryOperatorDefinition.less_than()
+    if op.is_greater_than_eq:
+        return BinaryOperatorDefinition.less_than_eq()
     raise ValueError(f'operator {op!r} does not have an inverse')
 
 
