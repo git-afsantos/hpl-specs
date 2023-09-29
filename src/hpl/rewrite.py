@@ -376,20 +376,23 @@ def _split_and_quantifier(quant: HplQuantifier) -> HplExpression:
 
 
 @typechecked
-def _simplify(phi: HplExpression) -> HplExpression:
-    if is_not(phi):
-        return _simplify_negation(phi)
-    if is_iff(phi):
-        return _simplify_iff(phi)
-    if is_implies(phi):
-        return _simplify_implies(phi)
-    if is_and(phi):
-        return _simplify_conjunction(phi)
-    if is_or(phi):
-        return _simplify_disjunction(phi)
-    if is_comparison(phi):
-        return _simplify_comparison(phi)
-    return phi
+def _simplify(expr: HplExpression) -> HplExpression:
+    if is_not(expr):
+        return _simplify_negation(expr)
+    if is_iff(expr):
+        return _simplify_iff(expr)
+    if is_implies(expr):
+        return _simplify_implies(expr)
+    if is_and(expr):
+        return _simplify_conjunction(expr)
+    if is_or(expr):
+        return _simplify_disjunction(expr)
+    if is_comparison(expr):
+        return _simplify_comparison(expr)
+    if is_arithmetic_operator(expr) or is_negative_number(expr):
+        return _simplify_arithmetic(expr)
+    # TODO inclusion, quantifiers, ...
+    return expr
 
 
 @typechecked
@@ -479,20 +482,8 @@ def _simplify_disjunction(phi: HplBinaryOperator) -> HplExpression:
 
 
 @typechecked
-def _simplify_comparison(phi: HplBinaryOperator) -> HplExpression:
-    a: HplExpression = _simplify(phi.operand1)
-    b: HplExpression = _simplify(phi.operand2)
-    if is_self_or_field(b) and not is_self_or_field(a):
-        if phi.operator.commutative:
-            return phi.but(operand1=b, operand2=a)
-        op: BinaryOperatorDefinition = inverse_operator(phi.operator)
-        return HplBinaryOperator(op, b, a)
-    return phi
-
-
-@typechecked
 def _simplify_negation(phi: HplUnaryOperator) -> HplExpression:
-    p: HplExpression = phi.operand
+    p: HplExpression = _simplify(phi.operand)
     # ~T == F
     if is_true(p):
         return false()
@@ -502,8 +493,87 @@ def _simplify_negation(phi: HplUnaryOperator) -> HplExpression:
     # ~~p  ==  p
     if is_not(p):
         assert isinstance(p, HplUnaryOperator)
-        return _simplify(p.operand)
-    return phi
+        # simplification is redundant, should be recursive
+        # return _simplify(p.operand)
+        return p.operand
+    return phi if p is phi.operand else Not(p)
+
+
+@typechecked
+def _simplify_comparison(phi: HplBinaryOperator) -> HplExpression:
+    op: BinaryOperatorDefinition = phi.operator
+    a: HplExpression = _simplify(phi.operand1)
+    b: HplExpression = _simplify(phi.operand2)
+
+    if isinstance(a, HplLiteral) and isinstance(b, HplLiteral):
+        if op.is_equality:
+            return HplLiteral.boolean(a.value == b.value)
+        if op.is_less_than:
+            return HplLiteral.boolean(a.value < b.value)
+        if op.is_less_than_eq:
+            return HplLiteral.boolean(a.value <= b.value)
+        if op.is_greater_than:
+            return HplLiteral.boolean(a.value > b.value)
+        if op.is_greater_than_eq:
+            return HplLiteral.boolean(a.value >= b.value)
+        assert op.is_inequality
+        return HplLiteral.boolean(a.value != b.value)
+
+    if is_self_or_field(b) and not is_self_or_field(a):
+        if phi.operator.commutative:
+            return phi.but(operand1=b, operand2=a)
+        op: BinaryOperatorDefinition = inverse_operator(phi.operator)
+        return HplBinaryOperator(op, b, a)
+
+    # this must come after the rewrite above that puts fields on the LHS
+    if a is phi.operand1 and b is phi.operand2:
+        return phi
+
+    return HplBinaryOperator(op, a, b)
+
+
+@typechecked
+def _simplify_arithmetic(expr: HplExpression) -> HplExpression:
+    # TODO function calls (max, min, sqrt, ...)
+
+    if is_negative_number(expr):
+        assert isinstance(expr, HplUnaryOperator)
+        a: HplExpression = _simplify_arithmetic(expr.operand)
+        if is_number_literal(a):
+            assert isinstance(a, HplLiteral)
+            return HplLiteral.number(-a.value)
+        # --a = a
+        if is_negative_number(a):
+            assert isinstance(a, HplUnaryOperator)
+            # simplification is redundant, should be recursive
+            # return _simplify_arithmetic(a.operand)
+            return a.operand
+        return expr if a is expr.operand else HplUnaryOperator.minus(a)
+
+    if is_arithmetic_operator(expr):
+        assert isinstance(expr, HplBinaryOperator)
+        op: BinaryOperatorDefinition = expr.operator
+        a: HplExpression = _simplify_arithmetic(expr.operand1)
+        b: HplExpression = _simplify_arithmetic(expr.operand2)
+        if a is expr.operand1 and b is expr.operand2:
+            return expr
+        if not is_number_literal(a) or not is_number_literal(b):
+            return HplBinaryOperator(op, a, b)
+        # from this point onward, both operands are literals
+        assert isinstance(a, HplLiteral)
+        assert isinstance(b, HplLiteral)
+        if op.is_plus:
+            return HplLiteral.number(a.value + b.value)
+        if op.is_minus:
+            return HplLiteral.number(a.value - b.value)
+        if op.is_times:
+            return HplLiteral.number(a.value * b.value)
+        if op.is_division:
+            return HplLiteral.number(a.value / b.value)
+        assert op.is_power
+        return HplLiteral.number(a.value ** b.value)
+
+    return expr
 
 
 ###############################################################################
@@ -537,6 +607,18 @@ def is_inclusion(expr: HplExpression) -> bool:
 
 def is_comparison(expr: HplExpression) -> bool:
     return expr.is_operator and expr.arity == 2 and expr.operator.is_comparison
+
+
+def is_arithmetic_operator(expr: HplExpression) -> bool:
+    return expr.is_operator and expr.arity == 2 and expr.operator.is_arithmetic
+
+
+def is_number_literal(expr: HplExpression) -> bool:
+    return expr.is_value and expr.is_literal and expr.can_be_number
+
+
+def is_negative_number(expr: HplExpression) -> bool:
+    return expr.is_operator and expr.arity == 1 and expr.operator.is_minus
 
 
 def is_true(expr: HplExpression) -> bool:

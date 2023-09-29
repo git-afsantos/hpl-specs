@@ -7,7 +7,7 @@
 
 from hpl.ast.expressions import HplExpression
 from hpl.ast.predicates import HplContradiction, HplPredicate, HplPredicateExpression, HplVacuousTruth
-from hpl.parser import condition_parser
+from hpl.parser import condition_parser, expression_parser
 from hpl.rewrite import (
     is_true,
     refactor_reference,
@@ -334,3 +334,19 @@ def test_simplify_comparison():
     q = simplify(p)
     assert isinstance(q, HplPredicateExpression)
     assert q == parser.parse('a != a + 1')
+
+
+def test_simplify_arithmetic():
+    parser = expression_parser()
+    p: HplExpression = parser.parse('a = ---1 + 1')
+    q: HplExpression = simplify(p)
+    assert isinstance(q, HplExpression)
+    assert q == parser.parse('a = 0')
+    p = parser.parse('0 = ---1 + 1')
+    q = simplify(p)
+    assert isinstance(q, HplExpression)
+    assert q == parser.parse('True')
+    p = parser.parse('1 = --1 + 1')
+    q = simplify(p)
+    assert isinstance(q, HplExpression)
+    assert q == parser.parse('False')

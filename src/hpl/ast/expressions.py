@@ -11,6 +11,7 @@ from enum import Enum
 
 from attrs import field, frozen
 from attrs.validators import deep_iterable, instance_of
+from typeguard import check_type
 
 from hpl.ast.base import HplAstObject
 from hpl.errors import HplSanityError, index_out_of_range, missing_field, type_error_in_expr
@@ -398,6 +399,16 @@ class HplLiteral(HplAtomicValue):
     @classmethod
     def false(cls) -> 'HplLiteral':
         return cls(token='False', value=False)
+
+    @classmethod
+    def boolean(cls, value: bool) -> 'HplLiteral':
+        value = check_type(value, bool)
+        return cls(token=str(value), value=value)
+
+    @classmethod
+    def number(cls, value: Union[int, float]) -> 'HplLiteral':
+        value = check_type(value, Union[int, float])
+        return cls(token=str(value), value=value)
 
     @property
     def default_data_type(self) -> DataType:
@@ -887,6 +898,10 @@ class BinaryOperatorDefinition:
         return (self.parameter1, self.parameter2)
 
     @property
+    def is_arithmetic(self) -> bool:
+        return self.token in ('+', '-', '*', '/', '**')
+
+    @property
     def is_plus(self) -> bool:
         return self.token == '+'
 
@@ -901,6 +916,10 @@ class BinaryOperatorDefinition:
     @property
     def is_division(self) -> bool:
         return self.token == '/'
+
+    @property
+    def is_power(self) -> bool:
+        return self.token == '**'
 
     @property
     def is_inclusion(self) -> bool:
