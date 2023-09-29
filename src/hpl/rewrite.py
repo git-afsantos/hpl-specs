@@ -378,109 +378,131 @@ def _split_and_quantifier(quant: HplQuantifier) -> HplExpression:
 @typechecked
 def _simplify(phi: HplExpression) -> HplExpression:
     if is_not(phi):
-        assert isinstance(phi, HplUnaryOperator)
-        psi: HplExpression = phi.operand
-        # ~T == F
-        if is_true(psi):
+        return _simplify_negation(phi)
+    if is_iff(phi):
+        return _simplify_iff(phi)
+    if is_implies(phi):
+        return _simplify_implies(phi)
+    if is_and(phi):
+        return _simplify_conjunction(phi)
+    if is_or(phi):
+        return _simplify_disjunction(phi)
+    if is_comparison(phi):
+        return _simplify_comparison(phi)
+    return phi
+
+
+@typechecked
+def _simplify_iff(phi: HplBinaryOperator) -> HplExpression:
+    # (p == p) == T
+    p: HplExpression = _simplify(phi.operand1)
+    q: HplExpression = _simplify(phi.operand2)
+    if p == q:
+        return true()
+    # (p == q) == ((p -> q) & (q -> p))
+    return _simplify(And(Implies(p, q), Implies(q, p)))
+
+
+@typechecked
+def _simplify_implies(phi: HplBinaryOperator) -> HplExpression:
+    # p -> p == T
+    p: HplExpression = _simplify(phi.operand1)
+    q: HplExpression = _simplify(phi.operand2)
+    if p == q:
+        return true()
+    # p -> q == ~p | q
+    return _simplify(Or(Not(p), q))
+
+
+@typechecked
+def _simplify_conjunction(phi: HplBinaryOperator) -> HplExpression:
+    p: HplExpression = _simplify(phi.operand1)
+    q: HplExpression = _simplify(phi.operand2)
+    # F & q == F
+    if is_false(p):
+        return p
+    # p & F == F
+    if is_false(q):
+        return q
+    # T & q == q
+    if is_true(p):
+        return q
+    # p & T == p
+    if is_true(q):
+        return p
+    # p & p == p
+    if p == q:
+        return p
+    # ~p & p == F
+    if is_not(p):
+        assert isinstance(p, HplUnaryOperator)
+        if p.operand == q:
             return false()
-        # ~F == T
-        if is_false(psi):
+    # p & ~p == F
+    if is_not(q):
+        assert isinstance(q, HplUnaryOperator)
+        if q.operand == p:
+            return false()
+    return phi if p is phi.operand1 and q is phi.operand2 else And(p, q)
+
+
+@typechecked
+def _simplify_disjunction(phi: HplBinaryOperator) -> HplExpression:
+    p: HplExpression = _simplify(phi.operand1)
+    q: HplExpression = _simplify(phi.operand2)
+    # T | q == T
+    if is_true(p):
+        return p
+    # p | T == T
+    if is_true(q):
+        return q
+    # F | q == q
+    if is_false(p):
+        return q
+    # p | F == p
+    if is_false(q):
+        return p
+    # p | p == p
+    if p == q:
+        return p
+    # ~p | p == T
+    if is_not(p):
+        assert isinstance(p, HplUnaryOperator)
+        if p.operand == q:
             return true()
-        # ~~p  ==  p
-        if is_not(psi):
-            assert isinstance(psi, HplUnaryOperator)
-            return _simplify(psi.operand)
-
-    elif is_iff(phi):
-        assert isinstance(phi, HplBinaryOperator)
-        # (p == p) == T
-        p: HplExpression = _simplify(phi.operand1)
-        q: HplExpression = _simplify(phi.operand2)
-        if p == q:
+    # p | ~p == T
+    if is_not(q):
+        assert isinstance(q, HplUnaryOperator)
+        if q.operand == p:
             return true()
-        # (p == q) == ((p -> q) & (q -> p))
-        return _simplify(And(Implies(p, q), Implies(q, p)))
+    return phi if p is phi.operand1 and q is phi.operand2 else Or(p, q)
 
-    elif is_implies(phi):
-        assert isinstance(phi, HplBinaryOperator)
-        # p -> p == T
-        p: HplExpression = _simplify(phi.operand1)
-        q: HplExpression = _simplify(phi.operand2)
-        if p == q:
-            return true()
-        # p -> q == ~p | q
-        return _simplify(Or(Not(p), q))
 
-    elif is_and(phi):
-        assert isinstance(phi, HplBinaryOperator)
-        p: HplExpression = _simplify(phi.operand1)
-        q: HplExpression = _simplify(phi.operand2)
-        # F & q == F
-        if is_false(p):
-            return p
-        # p & F == F
-        if is_false(q):
-            return q
-        # T & q == q
-        if is_true(p):
-            return q
-        # p & T == p
-        if is_true(q):
-            return p
-        # p & p == p
-        if p == q:
-            return p
-        # ~p & p == F
-        if is_not(p):
-            assert isinstance(p, HplUnaryOperator)
-            if p.operand == q:
-                return false()
-        # p & ~p == F
-        if is_not(q):
-            assert isinstance(q, HplUnaryOperator)
-            if q.operand == p:
-                return false()
-        return phi if p is phi.operand1 and q is phi.operand2 else And(p, q)
+@typechecked
+def _simplify_comparison(phi: HplBinaryOperator) -> HplExpression:
+    a: HplExpression = _simplify(phi.operand1)
+    b: HplExpression = _simplify(phi.operand2)
+    if is_self_or_field(b) and not is_self_or_field(a):
+        if phi.operator.commutative:
+            return phi.but(operand1=b, operand2=a)
+        op: BinaryOperatorDefinition = inverse_operator(phi.operator)
+        return HplBinaryOperator(op, b, a)
+    return phi
 
-    elif is_or(phi):
-        assert isinstance(phi, HplBinaryOperator)
-        p: HplExpression = _simplify(phi.operand1)
-        q: HplExpression = _simplify(phi.operand2)
-        # T | q == T
-        if is_true(p):
-            return p
-        # p | T == T
-        if is_true(q):
-            return q
-        # F | q == q
-        if is_false(p):
-            return q
-        # p | F == p
-        if is_false(q):
-            return p
-        # p | p == p
-        if p == q:
-            return p
-        # ~p | p == T
-        if is_not(p):
-            assert isinstance(p, HplUnaryOperator)
-            if p.operand == q:
-                return true()
-        # p | ~p == T
-        if is_not(q):
-            assert isinstance(q, HplUnaryOperator)
-            if q.operand == p:
-                return true()
-        return phi if p is phi.operand1 and q is phi.operand2 else Or(p, q)
 
-    elif is_comparison(phi):
-        assert isinstance(phi, HplBinaryOperator)
-        if is_self_or_field(phi.operand2) and not is_self_or_field(phi.operand1):
-            if phi.operator.commutative:
-                return phi.but(operand1=phi.operand2, operand2=phi.operand1)
-            op: BinaryOperatorDefinition = inverse_operator(phi.operator)
-            return HplBinaryOperator(op, phi.operand2, phi.operand1)
-
+@typechecked
+def _simplify_negation(phi: HplUnaryOperator) -> HplExpression:
+    p: HplExpression = phi.operand
+    # ~T == F
+    if is_true(p):
+        return false()
+    # ~F == T
+    if is_false(p):
+        return true()
+    # ~~p  ==  p
+    if is_not(p):
+        assert isinstance(p, HplUnaryOperator)
+        return _simplify(p.operand)
     return phi
 
 
