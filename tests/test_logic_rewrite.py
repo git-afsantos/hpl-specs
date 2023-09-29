@@ -311,3 +311,26 @@ def test_simplify_or():
     q = simplify(p)
     assert isinstance(q, HplPredicateExpression)
     assert q == a
+
+
+def test_simplify_comparison():
+    p: HplPredicate = parser.parse('a < 0')
+    q: HplPredicate = simplify(p)
+    assert isinstance(q, HplPredicateExpression)
+    assert q == p
+    p = parser.parse('0 < a')
+    q = simplify(p)
+    assert isinstance(q, HplPredicateExpression)
+    assert q == parser.parse('a > 0')
+    p = parser.parse('0 = a')
+    q = simplify(p)
+    assert isinstance(q, HplPredicateExpression)
+    assert q == parser.parse('a = 0')
+    p = parser.parse('a = b')
+    q = simplify(p)
+    assert isinstance(q, HplPredicateExpression)
+    assert q == p
+    p = parser.parse('a + 1 != a')
+    q = simplify(p)
+    assert isinstance(q, HplPredicateExpression)
+    assert q == parser.parse('a != a + 1')
