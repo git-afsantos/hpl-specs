@@ -378,35 +378,99 @@ def _split_and_quantifier(quant: HplQuantifier) -> HplExpression:
 @typechecked
 def _simplify(phi: HplExpression) -> HplExpression:
     if is_not(phi):
-        # ~~p  ==  p
         assert isinstance(phi, HplUnaryOperator)
         psi: HplExpression = phi.operand
+        # ~T == F
+        if is_true(psi):
+            return false()
+        # ~F == T
+        if is_false(psi):
+            return true()
+        # ~~p  ==  p
         if is_not(psi):
             assert isinstance(psi, HplUnaryOperator)
             return _simplify(psi.operand)
 
     elif is_iff(phi):
-        # (p == q) == ((p -> q) & (q -> p))
         assert isinstance(phi, HplBinaryOperator)
-        p: HplExpression = _simplify(Implies(phi.operand1, phi.operand2))
-        q: HplExpression = _simplify(Implies(phi.operand2, phi.operand1))
-        return And(p, q)
+        # (p == p) == T
+        p: HplExpression = _simplify(phi.operand1)
+        q: HplExpression = _simplify(phi.operand2)
+        if p == q:
+            return true()
+        # (p == q) == ((p -> q) & (q -> p))
+        return _simplify(And(Implies(p, q), Implies(q, p)))
 
     elif is_implies(phi):
-        # p -> q == ~p | q
         assert isinstance(phi, HplBinaryOperator)
-        return Or(Not(phi.operand1), phi.operand2)
+        # p -> p == T
+        p: HplExpression = _simplify(phi.operand1)
+        q: HplExpression = _simplify(phi.operand2)
+        if p == q:
+            return true()
+        # p -> q == ~p | q
+        return _simplify(Or(Not(p), q))
 
     elif is_and(phi):
         assert isinstance(phi, HplBinaryOperator)
         p: HplExpression = _simplify(phi.operand1)
         q: HplExpression = _simplify(phi.operand2)
+        # F & q == F
+        if is_false(p):
+            return p
+        # p & F == F
+        if is_false(q):
+            return q
+        # T & q == q
+        if is_true(p):
+            return q
+        # p & T == p
+        if is_true(q):
+            return p
+        # p & p == p
+        if p == q:
+            return p
+        # ~p & p == F
+        if is_not(p):
+            assert isinstance(p, HplUnaryOperator)
+            if p.operand == q:
+                return false()
+        # p & ~p == F
+        if is_not(q):
+            assert isinstance(q, HplUnaryOperator)
+            if q.operand == p:
+                return false()
         return phi if p is phi.operand1 and q is phi.operand2 else And(p, q)
 
     elif is_or(phi):
         assert isinstance(phi, HplBinaryOperator)
         p: HplExpression = _simplify(phi.operand1)
         q: HplExpression = _simplify(phi.operand2)
+        # T | q == T
+        if is_true(p):
+            return p
+        # p | T == T
+        if is_true(q):
+            return q
+        # F | q == q
+        if is_false(p):
+            return q
+        # p | F == p
+        if is_false(q):
+            return p
+        # p | p == p
+        if p == q:
+            return p
+        # ~p | p == T
+        if is_not(p):
+            assert isinstance(p, HplUnaryOperator)
+            if p.operand == q:
+                return true()
+        # p | ~p == T
+        if is_not(q):
+            assert isinstance(q, HplUnaryOperator)
+            if q.operand == p:
+                return true()
         return phi if p is phi.operand1 and q is phi.operand2 else Or(p, q)
 
     elif is_comparison(phi):
@@ -417,8 +481,6 @@ def _simplify(phi: HplExpression) -> HplExpression:
             op: BinaryOperatorDefinition = inverse_operator(phi.operator)
             return HplBinaryOperator(op, phi.operand2, phi.operand1)
 
-    # if is_true(phi) or is_false(phi):
-    #     return phi
     return phi
 
 
