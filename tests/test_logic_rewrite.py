@@ -6,13 +6,14 @@
 ###############################################################################
 
 from hpl.ast.expressions import HplExpression
-from hpl.ast.predicates import HplPredicate
+from hpl.ast.predicates import HplContradiction, HplPredicate, HplPredicateExpression, HplVacuousTruth
 from hpl.parser import condition_parser
 from hpl.rewrite import (
     is_true,
     refactor_reference,
     replace_this_with_var,
     replace_var_with_this,
+    simplify,
     split_and,
 )
 
@@ -174,3 +175,31 @@ def test_split_conjunction_with_splits():
         for phi in conditions:
             assert isinstance(phi, HplExpression)
             assert phi != predicate.condition
+
+
+def test_simplify_vacuous():
+    p: HplPredicate = HplVacuousTruth()
+    q: HplPredicate = simplify(p)
+    assert q is p
+    p = HplContradiction()
+    q = simplify(p)
+    assert q is p
+    p = parser.parse('True')
+    q = simplify(p)
+    assert isinstance(q, HplVacuousTruth)
+    p = parser.parse('False')
+    q = simplify(p)
+    assert isinstance(q, HplContradiction)
+
+
+def test_simplify_double_negation():
+    p: HplPredicate = parser.parse('not not True')
+    q: HplPredicate = simplify(p)
+    assert isinstance(q, HplVacuousTruth)
+    p: HplPredicate = parser.parse('not not False')
+    q = simplify(p)
+    assert isinstance(q, HplContradiction)
+    p: HplPredicate = parser.parse('not not a')
+    q = simplify(p)
+    assert isinstance(q, HplPredicateExpression)
+    assert q == parser.parse('a')
