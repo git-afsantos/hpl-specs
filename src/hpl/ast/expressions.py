@@ -1494,6 +1494,10 @@ class HplFieldAccess(HplDataAccess):
     def is_field(self) -> bool:
         return True
 
+    @property
+    def object(self) -> HplExpression:
+        return self.message
+
     def children(self) -> Tuple[HplExpression]:
         return (self.message,)
 
@@ -1544,6 +1548,10 @@ class HplArrayAccess(HplDataAccess):
     @property
     def is_indexed(self) -> bool:
         return True
+
+    @property
+    def object(self) -> HplExpression:
+        return self.array
 
     def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.array, self.index)
