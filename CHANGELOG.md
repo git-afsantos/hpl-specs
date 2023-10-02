@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `split_and(p: HplPredicate | HplExpression)` function to `hpl.rewrite` module.
 - `simplify(p: HplPredicate | HplExpression)` function to `hpl.rewrite` module.
 - `is_inclusion` and `is_comparison` properties to `BinaryOperatorDefinition`.
+- Factory functions `boolean`, `number` and `string` to `HplLiteral`.
 
 ### Fixed
 - `HplPredicateExpression.expression` is now cast to `DataType.BOOL` on construction.
