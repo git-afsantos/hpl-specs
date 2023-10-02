@@ -1044,6 +1044,26 @@ class HplBinaryOperator(HplExpression):
         object.__setattr__(self, 'data_type', self.operator.result)
 
     @classmethod
+    def addition(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
+        return cls(operator=BuiltinBinaryOperator.ADD, operand1=a, operand2=b)
+
+    @classmethod
+    def subtraction(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
+        return cls(operator=BuiltinBinaryOperator.SUB, operand1=a, operand2=b)
+
+    @classmethod
+    def multiplication(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
+        return cls(operator=BuiltinBinaryOperator.MULT, operand1=a, operand2=b)
+
+    @classmethod
+    def division(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
+        return cls(operator=BuiltinBinaryOperator.DIV, operand1=a, operand2=b)
+
+    @classmethod
+    def power(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
+        return cls(operator=BuiltinBinaryOperator.POW, operand1=a, operand2=b)
+
+    @classmethod
     def conjunction(cls, a: HplExpression, b: HplExpression) -> 'HplBinaryOperator':
         return cls(operator=BuiltinBinaryOperator.AND, operand1=a, operand2=b)
 
