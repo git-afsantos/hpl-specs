@@ -7,17 +7,22 @@
 
 from typing import List, Tuple, TypeVar, Union
 
+import math
+
 from typeguard import typechecked
 
 from hpl.ast.expressions import (
     And,
     BinaryOperatorDefinition,
     Forall,
+    FunctionDefinition,
     HplBinaryOperator,
     HplExpression,
     HplFunctionCall,
     HplLiteral,
     HplQuantifier,
+    HplRange,
+    HplSet,
     HplThisMessage,
     HplUnaryOperator,
     HplVarReference,
@@ -391,6 +396,25 @@ def _simplify(expr: HplExpression) -> HplExpression:
         return _simplify_comparison(expr)
     if is_arithmetic_operator(expr) or is_negative_number(expr):
         return _simplify_arithmetic(expr)
+
+    if isinstance(expr, HplSet):
+        values = [_simplify(v) for v in expr.values]
+        n = len(expr.values)
+        value_set = set(values)
+        if len(value_set) != n:
+            return HplSet(value_set)
+        for i in range(n):
+            if values[i] is not expr.values[i]:
+                return HplSet(values)
+        return expr  # all the same
+
+    if isinstance(expr, HplRange):
+        lb: HplExpression = _simplify(expr.min_value)
+        ub: HplExpression = _simplify(expr.max_value)
+        if lb is expr.min_value and ub is expr.max_value:
+            return expr  # all the same
+        return expr.but(min_value=lb, max_value=ub)
+
     # TODO inclusion, quantifiers, ...
     return expr
 
@@ -534,8 +558,6 @@ def _simplify_comparison(phi: HplBinaryOperator) -> HplExpression:
 
 @typechecked
 def _simplify_arithmetic(expr: HplExpression) -> HplExpression:
-    # TODO function calls (max, min, sqrt, ...)
-
     if is_negative_number(expr):
         assert isinstance(expr, HplUnaryOperator)
         a: HplExpression = _simplify_arithmetic(expr.operand)
@@ -573,7 +595,292 @@ def _simplify_arithmetic(expr: HplExpression) -> HplExpression:
         assert op.is_power
         return HplLiteral.number(a.value ** b.value)
 
+    if expr.is_function_call:
+        return _simplify_function_call(expr)
+
     return expr
+
+
+@typechecked
+def _simplify_function_call(call: HplFunctionCall) -> HplExpression:
+    fun: FunctionDefinition = call.function
+    if fun.name == 'abs':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(abs(arg.value))
+
+    elif fun.name == 'bool':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if isinstance(arg, HplLiteral):
+            return HplLiteral.boolean(bool(arg.value))
+
+    elif fun.name == 'int':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if isinstance(arg, HplLiteral):
+            return HplLiteral.number(int(arg.value))
+
+    elif fun.name == 'float':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if isinstance(arg, HplLiteral):
+            return HplLiteral.number(float(arg.value))
+
+    elif fun.name == 'str':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if isinstance(arg, HplLiteral):
+            return HplLiteral.string(str(arg.value))
+
+    elif fun.name == 'len':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if isinstance(arg, HplSet):
+            return HplLiteral.number(len(arg.values))
+        elif isinstance(arg, HplRange):
+            if is_number_literal(arg.min_value) and is_number_literal(arg.max_value):
+                n = abs(int(arg.max_value.value) - int(arg.min_value.value))
+                if not arg.exclude_max:
+                    n += 1
+                if arg.exclude_min:
+                    n -= 1
+            return HplLiteral.number(n)
+        elif isinstance(arg, HplLiteral) and isinstance(arg.value, str):
+            return HplLiteral.number(len(arg.value))
+
+    elif fun.name == 'sum':
+        return _simplify_function_sum(call)
+
+    elif fun.name == 'prod':
+        return _simplify_function_prod(call)
+
+    elif fun.name == 'sqrt':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.sqrt(arg.value))
+
+    elif fun.name == 'ceil':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.ceil(arg.value))
+
+    elif fun.name == 'floor':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.floor(arg.value))
+
+    elif fun.name == 'sin':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.sin(arg.value))
+
+    elif fun.name == 'cos':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.cos(arg.value))
+
+    elif fun.name == 'tan':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.tan(arg.value))
+
+    elif fun.name == 'asin':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.asin(arg.value))
+
+    elif fun.name == 'acos':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.acos(arg.value))
+
+    elif fun.name == 'atan':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.atan(arg.value))
+
+    elif fun.name == 'atan2':
+        arg1: HplExpression = _simplify(call.arguments[0])
+        arg2: HplExpression = _simplify(call.arguments[1])
+        if is_number_literal(arg1) and is_number_literal(arg2):
+            assert isinstance(arg1, HplLiteral)
+            assert isinstance(arg2, HplLiteral)
+            return HplLiteral.number(math.atan2(arg1.value, arg2.value))
+
+    elif fun.name == 'deg':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.degrees(arg.value))
+
+    elif fun.name == 'rad':
+        arg: HplExpression = _simplify(call.arguments[0])
+        if is_number_literal(arg):
+            assert isinstance(arg, HplLiteral)
+            return HplLiteral.number(math.radians(arg.value))
+
+    elif fun.name == 'log':
+        arg1: HplExpression = _simplify(call.arguments[0])
+        arg2: HplExpression = _simplify(call.arguments[1])
+        if is_number_literal(arg1) and is_number_literal(arg2):
+            assert isinstance(arg1, HplLiteral)
+            assert isinstance(arg2, HplLiteral)
+            if arg2.value == 10:
+                return HplLiteral.number(math.log10(arg1.value))
+            return HplLiteral.number(math.log(arg1.value, arg2.value))
+
+    elif fun.name == 'max':
+        return _simplify_function_max(call)
+
+    elif fun.name == 'min':
+        return _simplify_function_max(call)
+
+    elif fun.name == 'gcd':
+        # FIXME compound single argument signature
+        arg1: HplExpression = _simplify(call.arguments[0])
+        arg2: HplExpression = _simplify(call.arguments[1])
+        if is_number_literal(arg1) and is_number_literal(arg2):
+            assert isinstance(arg1, HplLiteral)
+            assert isinstance(arg2, HplLiteral)
+            return HplLiteral.number(math.gcd(arg1.value, arg2.value))
+
+    return call
+
+
+def _simplify_function_sum(call: HplFunctionCall) -> HplExpression:
+    arg: HplExpression = _simplify(call.arguments[0])
+    if isinstance(arg, HplSet):
+        variables: List[HplExpression] = []
+        literals: List[Union[int, float]] = []
+        for v in arg.values:
+            if is_number_literal(v):
+                assert isinstance(v, HplLiteral)
+                literals.append(v.value)
+            else:
+                variables.append(v)
+        n = sum(literals)
+        expr: HplExpression = HplLiteral.number(n)
+        for v in variables:
+            expr = HplBinaryOperator.addition(v, expr)
+        return _simplify(expr)
+    if isinstance(arg, HplRange):
+        if is_number_literal(arg.min_value) and is_number_literal(arg.max_value):
+            n = 0
+            lb = int(arg.min_value.value) + (1 if arg.exclude_min else 0)
+            ub = int(arg.max_value.value) + (0 if arg.exclude_max else 1)
+            for i in range(lb, ub):
+                n += i
+            return HplLiteral.number(n)
+    return call
+
+
+def _simplify_function_prod(call: HplFunctionCall) -> HplExpression:
+    arg: HplExpression = _simplify(call.arguments[0])
+    if isinstance(arg, HplSet):
+        variables: List[HplExpression] = []
+        literals: List[Union[int, float]] = []
+        for v in arg.values:
+            if is_number_literal(v):
+                assert isinstance(v, HplLiteral)
+                literals.append(v.value)
+            else:
+                variables.append(v)
+        n = 1
+        for v in literals:
+            n *= v
+        expr: HplExpression = HplLiteral.number(n)
+        if n == 0:
+            return expr
+        for v in variables:
+            expr = HplBinaryOperator.multiplication(v, expr)
+        return _simplify(expr)
+    if isinstance(arg, HplRange):
+        if is_number_literal(arg.min_value) and is_number_literal(arg.max_value):
+            n = 1
+            lb = int(arg.min_value.value) + (1 if arg.exclude_min else 0)
+            ub = int(arg.max_value.value) + (0 if arg.exclude_max else 1)
+            for i in range(lb, ub):
+                n *= i
+            return HplLiteral.number(n)
+    return call
+
+
+def _simplify_function_max(call: HplFunctionCall) -> HplExpression:
+    if len(call.arguments) == 1:
+        arg: HplExpression = _simplify(call.arguments[0])
+        if isinstance(arg, HplRange):
+            if is_number_literal(arg.min_value) and is_number_literal(arg.max_value):
+                lb = int(arg.min_value.value) + (1 if arg.exclude_min else 0)
+                ub = int(arg.max_value.value) - (1 if arg.exclude_max else 0)
+                for i in range(lb, ub):
+                    return HplLiteral.number(max(lb, ub))
+                # do not perform simplification for empty range
+                # FIXME raise error?
+            return call
+        if isinstance(arg, HplSet):
+            values = arg.values
+        else:
+            return call
+    else:
+        values = call.arguments
+
+    variables: List[HplExpression] = []
+    literals: List[Union[int, float]] = []
+    for v in values:
+        if is_number_literal(v):
+            assert isinstance(v, HplLiteral)
+            literals.append(v.value)
+        else:
+            variables.append(v)
+    if len(literals) < 2:
+        return call  # nothing to do
+    n = HplLiteral.number(max(*literals))
+    if not variables:
+        return n
+    variables.append(n)
+    return call.but(arguments=variables)
+
+
+def _simplify_function_min(call: HplFunctionCall) -> HplExpression:
+    if len(call.arguments) == 1:
+        arg: HplExpression = _simplify(call.arguments[0])
+        if isinstance(arg, HplRange):
+            if is_number_literal(arg.min_value) and is_number_literal(arg.max_value):
+                lb = int(arg.min_value.value) + (1 if arg.exclude_min else 0)
+                ub = int(arg.max_value.value) - (1 if arg.exclude_max else 0)
+                for i in range(lb, ub):
+                    return HplLiteral.number(min(lb, ub))
+                # do not perform simplification for empty range
+                # FIXME raise error?
+            return call
+        if isinstance(arg, HplSet):
+            values = arg.values
+        else:
+            return call
+    else:
+        values = call.arguments
+
+    variables: List[HplExpression] = []
+    literals: List[Union[int, float]] = []
+    for v in values:
+        if is_number_literal(v):
+            assert isinstance(v, HplLiteral)
+            literals.append(v.value)
+        else:
+            variables.append(v)
+    if len(literals) < 2:
+        return call  # nothing to do
+    n = HplLiteral.number(min(*literals))
+    if not variables:
+        return n
+    variables.append(n)
+    return call.but(arguments=variables)
 
 
 ###############################################################################
@@ -635,6 +942,10 @@ def is_self_or_field(expr: HplExpression) -> bool:
     if expr.is_accessor and is_self_reference(expr.object):
         return True
     return False
+
+
+def is_call_to(expr: HplExpression, function: str) -> bool:
+    return expr.is_function_call and expr.function.name == function
 
 
 def empty_test(expr: HplExpression) -> HplBinaryOperator:
