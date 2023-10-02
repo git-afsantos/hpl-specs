@@ -410,6 +410,11 @@ class HplLiteral(HplAtomicValue):
         value = check_type(value, Union[int, float])
         return cls(token=str(value), value=value)
 
+    @classmethod
+    def string(cls, value: str) -> 'HplLiteral':
+        value = check_type(value, str)
+        return cls(token=value, value=value)
+
     @property
     def default_data_type(self) -> DataType:
         return DataType.PRIMITIVE
