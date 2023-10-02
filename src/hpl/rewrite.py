@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from typing import List, Tuple, TypeVar, Union
+from typing import List, Optional, Tuple, TypeVar, Union
 
 import math
 
@@ -14,6 +14,7 @@ from typeguard import typechecked
 from hpl.ast.expressions import (
     And,
     BinaryOperatorDefinition,
+    BuiltinBinaryOperator,
     Forall,
     FunctionDefinition,
     HplBinaryOperator,
@@ -46,6 +47,21 @@ from hpl.ast.properties import HplProperty, HplScope
 ###############################################################################
 
 P = TypeVar('P', HplPredicate, HplExpression)
+
+INVERSE_OPERATORS = {
+    BuiltinBinaryOperator.ADD.value: BuiltinBinaryOperator.ADD.value,
+    BuiltinBinaryOperator.MULT.value: BuiltinBinaryOperator.MULT.value,
+    BuiltinBinaryOperator.AND.value: BuiltinBinaryOperator.AND.value,
+    BuiltinBinaryOperator.OR.value: BuiltinBinaryOperator.OR.value,
+    BuiltinBinaryOperator.IFF.value: BuiltinBinaryOperator.IFF.value,
+    BuiltinBinaryOperator.ADD.value: BuiltinBinaryOperator.ADD.value,
+    BuiltinBinaryOperator.EQ.value: BuiltinBinaryOperator.EQ.value,
+    BuiltinBinaryOperator.NEQ.value: BuiltinBinaryOperator.NEQ.value,
+    BuiltinBinaryOperator.LT.value: BuiltinBinaryOperator.GT.value,
+    BuiltinBinaryOperator.GT.value: BuiltinBinaryOperator.LT.value,
+    BuiltinBinaryOperator.LTE.value: BuiltinBinaryOperator.GTE.value,
+    BuiltinBinaryOperator.GTE.value: BuiltinBinaryOperator.LTE.value,
+}
 
 ###############################################################################
 # Formula Rewriting
@@ -382,20 +398,12 @@ def _split_and_quantifier(quant: HplQuantifier) -> HplExpression:
 
 @typechecked
 def _simplify(expr: HplExpression) -> HplExpression:
-    if is_not(expr):
-        return _simplify_negation(expr)
-    if is_iff(expr):
-        return _simplify_iff(expr)
-    if is_implies(expr):
-        return _simplify_implies(expr)
-    if is_and(expr):
-        return _simplify_conjunction(expr)
-    if is_or(expr):
-        return _simplify_disjunction(expr)
-    if is_comparison(expr):
-        return _simplify_comparison(expr)
-    if is_arithmetic_operator(expr) or is_negative_number(expr):
-        return _simplify_arithmetic(expr)
+    if isinstance(expr, HplUnaryOperator):
+        return _simplify_unary_operator(expr)
+    if isinstance(expr, HplBinaryOperator):
+        return _simplify_binary_operator(expr)
+    if expr.is_function_call:
+        return _simplify_function_call(expr)
 
     if isinstance(expr, HplSet):
         values = [_simplify(v) for v in expr.values]
@@ -420,89 +428,12 @@ def _simplify(expr: HplExpression) -> HplExpression:
 
 
 @typechecked
-def _simplify_iff(phi: HplBinaryOperator) -> HplExpression:
-    # (p == p) == T
-    p: HplExpression = _simplify(phi.operand1)
-    q: HplExpression = _simplify(phi.operand2)
-    if p == q:
-        return true()
-    # (p == q) == ((p -> q) & (q -> p))
-    return _simplify(And(Implies(p, q), Implies(q, p)))
-
-
-@typechecked
-def _simplify_implies(phi: HplBinaryOperator) -> HplExpression:
-    # p -> p == T
-    p: HplExpression = _simplify(phi.operand1)
-    q: HplExpression = _simplify(phi.operand2)
-    if p == q:
-        return true()
-    # p -> q == ~p | q
-    return _simplify(Or(Not(p), q))
-
-
-@typechecked
-def _simplify_conjunction(phi: HplBinaryOperator) -> HplExpression:
-    p: HplExpression = _simplify(phi.operand1)
-    q: HplExpression = _simplify(phi.operand2)
-    # F & q == F
-    if is_false(p):
-        return p
-    # p & F == F
-    if is_false(q):
-        return q
-    # T & q == q
-    if is_true(p):
-        return q
-    # p & T == p
-    if is_true(q):
-        return p
-    # p & p == p
-    if p == q:
-        return p
-    # ~p & p == F
-    if is_not(p):
-        assert isinstance(p, HplUnaryOperator)
-        if p.operand == q:
-            return false()
-    # p & ~p == F
-    if is_not(q):
-        assert isinstance(q, HplUnaryOperator)
-        if q.operand == p:
-            return false()
-    return phi if p is phi.operand1 and q is phi.operand2 else And(p, q)
-
-
-@typechecked
-def _simplify_disjunction(phi: HplBinaryOperator) -> HplExpression:
-    p: HplExpression = _simplify(phi.operand1)
-    q: HplExpression = _simplify(phi.operand2)
-    # T | q == T
-    if is_true(p):
-        return p
-    # p | T == T
-    if is_true(q):
-        return q
-    # F | q == q
-    if is_false(p):
-        return q
-    # p | F == p
-    if is_false(q):
-        return p
-    # p | p == p
-    if p == q:
-        return p
-    # ~p | p == T
-    if is_not(p):
-        assert isinstance(p, HplUnaryOperator)
-        if p.operand == q:
-            return true()
-    # p | ~p == T
-    if is_not(q):
-        assert isinstance(q, HplUnaryOperator)
-        if q.operand == p:
-            return true()
-    return phi if p is phi.operand1 and q is phi.operand2 else Or(p, q)
+def _simplify_unary_operator(expr: HplUnaryOperator) -> HplExpression:
+    if expr.operator.is_not:
+        return _simplify_negation(expr)
+    if expr.operator.is_minus:
+        return _simplify_negative_number(expr)
+    return expr
 
 
 @typechecked
@@ -524,11 +455,197 @@ def _simplify_negation(phi: HplUnaryOperator) -> HplExpression:
 
 
 @typechecked
-def _simplify_comparison(phi: HplBinaryOperator) -> HplExpression:
-    op: BinaryOperatorDefinition = phi.operator
-    a: HplExpression = _simplify(phi.operand1)
-    b: HplExpression = _simplify(phi.operand2)
+def _simplify_negative_number(expr: HplUnaryOperator) -> HplExpression:
+    a: HplExpression = _simplify(expr.operand)
+    if is_number_literal(a):
+        assert isinstance(a, HplLiteral)
+        return HplLiteral.number(-a.value)
+    # --a = a
+    if is_negative_number(a):
+        assert isinstance(a, HplUnaryOperator)
+        # simplification is redundant, should be recursive
+        # return _simplify(a.operand)
+        return a.operand
+    return expr if a is expr.operand else HplUnaryOperator.minus(a)
 
+
+@typechecked
+def _simplify_binary_operator(expr: HplBinaryOperator) -> HplExpression:
+    expr = _pre_simplify_binop(expr)
+    if expr.operator.is_and:
+        return _simplify_conjunction(expr)
+    if expr.operator.is_or:
+        return _simplify_disjunction(expr)
+    if expr.operator.is_implies:
+        return _simplify_implies(expr)
+    if expr.operator.is_iff:
+        return _simplify_iff(expr)
+    if expr.operator.is_comparison:
+        return _simplify_comparison(expr)
+    if expr.operator.is_arithmetic:
+        return _simplify_arithmetic(expr)
+    if expr.operator.is_inclusion:
+        return expr  # FIXME
+    return expr
+
+
+def _pre_simplify_binop(expr: HplBinaryOperator) -> HplBinaryOperator:
+    op: BinaryOperatorDefinition = expr.operator
+    a: HplExpression = _simplify(expr.operand1)
+    b: HplExpression = _simplify(expr.operand2)
+    noop: bool = a is expr.operand1 and b is expr.operand2
+
+    # always push literals to the RHS
+    if isinstance(b, HplLiteral):
+        return expr if noop else HplBinaryOperator(op, a, b)
+
+    # always push self references to the LHS
+    if is_self_or_field(a, deep=True):
+        return expr if noop else HplBinaryOperator(op, a, b)
+
+    # (1 < x) == (x > 1)
+    flip: bool = isinstance(a, HplLiteral)
+    # (@y < x) == (x > @y)
+    flip = flip or is_self_or_field(b, deep=True)
+    if flip:
+        if op.commutative:
+            return expr.but(operand1=b, operand2=a)
+        inv: Optional[BinaryOperatorDefinition] = INVERSE_OPERATORS.get(op)
+        if inv is None:
+            return expr if noop else HplBinaryOperator(op, a, b)
+        return HplBinaryOperator(inv, b, a)
+
+    if op.associative:
+        left: bool = isinstance(a, HplBinaryOperator) and a.operator == op
+        right: bool = isinstance(b, HplBinaryOperator) and b.operator == op
+        if left and right:
+            a1: HplExpression = a.operand1
+            a2: HplExpression = a.operand2
+            b1: HplExpression = b.operand1
+            b2: HplExpression = b.operand2
+            if isinstance(a2, HplLiteral):
+                noop = False
+                x = b1
+                b1 = b2
+                b2 = a2
+                a2 = x
+                # it is now possible to have redundancy on the LHS
+                a = _simplify_binary_operator(HplBinaryOperator(op, a1, a2))
+                # it is now possible to have two literals on the RHS
+                b = _simplify_binary_operator(HplBinaryOperator(op, b1, b2))
+            if is_self_or_field(b1, deep=True):
+                noop = False
+                x = b1
+                b1 = a2
+                a2 = a1
+                a1 = x
+                # it is now possible to have redundancy on the LHS
+                a = _simplify_binary_operator(HplBinaryOperator(op, a1, a2))
+                # it is now possible to have two literals on the RHS
+                b = _simplify_binary_operator(HplBinaryOperator(op, b1, b2))
+        elif left:
+            if isinstance(a.operand2, HplLiteral):
+                noop = False
+                x = b
+                b = a.operand2
+                # it is now possible to have redundancy on the LHS
+                a = _simplify_binary_operator(HplBinaryOperator(op, a.operand1, x))
+        elif right:
+            if is_self_or_field(b.operand1, deep=True):
+                noop = False
+                x = a
+                a = b.operand1
+                # it is now possible to have redundancy on the RHS
+                b = _simplify_binary_operator(HplBinaryOperator(op, x, b.operand2))
+
+    return expr if noop else HplBinaryOperator(op, a, b)
+
+
+@typechecked
+def _simplify_iff(phi: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    p: HplExpression = phi.operand1
+    q: HplExpression = phi.operand2
+    # (p == p) == T
+    if p == q:
+        return true()
+    # (p == ~p) == F
+    if _obviously_different(p, q):
+        return false()
+    # (p == q) == ((p -> q) & (q -> p))
+    return _simplify(And(Implies(p, q), Implies(q, p)))
+
+
+@typechecked
+def _simplify_implies(phi: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    p: HplExpression = phi.operand1
+    q: HplExpression = phi.operand2
+    # p -> p == T
+    if p == q:
+        return true()
+    # p -> q == ~p | q
+    return _simplify(Or(Not(p), q))
+
+
+@typechecked
+def _simplify_conjunction(phi: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    p: HplExpression = phi.operand1
+    q: HplExpression = phi.operand2
+    # F & q == F
+    if is_false(p):
+        return p
+    # p & F == F
+    if is_false(q):
+        return q
+    # T & q == q
+    if is_true(p):
+        return q
+    # p & T == p
+    if is_true(q):
+        return p
+    # p & p == p
+    if p == q:
+        return p
+    # p & ~p == F
+    if _obviously_different(p, q):
+        return false()
+    return phi if p is phi.operand1 and q is phi.operand2 else And(p, q)
+
+
+@typechecked
+def _simplify_disjunction(phi: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    p: HplExpression = phi.operand1
+    q: HplExpression = phi.operand2
+    # T | q == T
+    if is_true(p):
+        return p
+    # p | T == T
+    if is_true(q):
+        return q
+    # F | q == q
+    if is_false(p):
+        return q
+    # p | F == p
+    if is_false(q):
+        return p
+    # p | p == p
+    if p == q:
+        return p
+    # p | ~p == T
+    if _obviously_different(p, q):
+        return true()
+    return phi if p is phi.operand1 and q is phi.operand2 else Or(p, q)
+
+
+@typechecked
+def _simplify_comparison(phi: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    op: BinaryOperatorDefinition = phi.operator
+    a: HplExpression = phi.operand1
+    b: HplExpression = phi.operand2
     if isinstance(a, HplLiteral) and isinstance(b, HplLiteral):
         if op.is_equality:
             return HplLiteral.boolean(a.value == b.value)
@@ -542,62 +659,126 @@ def _simplify_comparison(phi: HplBinaryOperator) -> HplExpression:
             return HplLiteral.boolean(a.value >= b.value)
         assert op.is_inequality
         return HplLiteral.boolean(a.value != b.value)
-
-    if is_self_or_field(b) and not is_self_or_field(a):
-        if phi.operator.commutative:
-            return phi.but(operand1=b, operand2=a)
-        op: BinaryOperatorDefinition = inverse_operator(phi.operator)
-        return HplBinaryOperator(op, b, a)
-
-    # this must come after the rewrite above that puts fields on the LHS
-    if a is phi.operand1 and b is phi.operand2:
-        return phi
-
-    return HplBinaryOperator(op, a, b)
+    if _obviously_different(a, b):
+        if op.is_equality:
+            return false()
+        if op.is_inequality:
+            return true()
+    return phi
 
 
 @typechecked
-def _simplify_arithmetic(expr: HplExpression) -> HplExpression:
-    if is_negative_number(expr):
-        assert isinstance(expr, HplUnaryOperator)
-        a: HplExpression = _simplify_arithmetic(expr.operand)
-        if is_number_literal(a):
-            assert isinstance(a, HplLiteral)
-            return HplLiteral.number(-a.value)
-        # --a = a
-        if is_negative_number(a):
-            assert isinstance(a, HplUnaryOperator)
-            # simplification is redundant, should be recursive
-            # return _simplify_arithmetic(a.operand)
-            return a.operand
-        return expr if a is expr.operand else HplUnaryOperator.minus(a)
+def _simplify_arithmetic(expr: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    op: BinaryOperatorDefinition = expr.operator
+    if op.is_plus:
+        return _simplify_addition(expr)
+    if op.is_minus:
+        return _simplify_subtraction(expr)
+    if op.is_times:
+        return _simplify_multiplication(expr)
+    if op.is_division:
+        return _simplify_division(expr)
+    if op.is_power:
+        return _simplify_exponentiation(expr)
+    return expr
 
-    if is_arithmetic_operator(expr):
-        assert isinstance(expr, HplBinaryOperator)
-        op: BinaryOperatorDefinition = expr.operator
-        a: HplExpression = _simplify_arithmetic(expr.operand1)
-        b: HplExpression = _simplify_arithmetic(expr.operand2)
-        if a is expr.operand1 and b is expr.operand2:
-            return expr
-        if not is_number_literal(a) or not is_number_literal(b):
-            return HplBinaryOperator(op, a, b)
-        # from this point onward, both operands are literals
-        assert isinstance(a, HplLiteral)
-        assert isinstance(b, HplLiteral)
-        if op.is_plus:
-            return HplLiteral.number(a.value + b.value)
-        if op.is_minus:
+
+@typechecked
+def _simplify_addition(expr: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    a: HplExpression = expr.operand1
+    b: HplExpression = expr.operand2
+    if isinstance(b, HplLiteral):
+        if b.value == 0:
+            return a
+        if isinstance(a, HplLiteral):
+            return b if a.value == 0 else HplLiteral.number(a.value + b.value)
+    if _obvious_negatives(a, b):
+        return HplLiteral.number(0)
+    return expr
+
+
+@typechecked
+def _simplify_subtraction(expr: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    a: HplExpression = expr.operand1
+    b: HplExpression = expr.operand2
+    if isinstance(b, HplLiteral):
+        if b.value == 0:
+            return a
+        if isinstance(a, HplLiteral):
             return HplLiteral.number(a.value - b.value)
-        if op.is_times:
+    if a == b:
+        return HplLiteral.number(0)
+    if isinstance(b, HplUnaryOperator) and b.operator.is_minus:
+        return _simplify_addition(HplBinaryOperator.addition(a, b.operand))
+    return expr
+
+
+@typechecked
+def _simplify_multiplication(expr: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    a: HplExpression = expr.operand1
+    b: HplExpression = expr.operand2
+    if isinstance(b, HplLiteral):
+        if b.value == 1:
+            return a
+        if b.value == 0:
+            return b
+        if isinstance(a, HplLiteral):
+            if a.value == 1:
+                return b
+            if a.value == 0:
+                return a
             return HplLiteral.number(a.value * b.value)
-        if op.is_division:
+        if b.value == -1:
+            return _simplify_unary_operator(HplUnaryOperator.minus(a))
+    if isinstance(a, HplBinaryOperator) and a.operator.is_division:
+        if a.operand2 == b:
+            return a.operand1
+    if isinstance(b, HplBinaryOperator) and b.operator.is_division:
+        if b.operand2 == a:
+            return b.operand1
+    # FIXME both are divisions
+    return expr
+
+
+@typechecked
+def _simplify_division(expr: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    a: HplExpression = expr.operand1
+    b: HplExpression = expr.operand2
+    if isinstance(b, HplLiteral):
+        if b.value == 0:
+            raise ZeroDivisionError(repr(expr))
+        if b.value == 1:
+            return a
+        if isinstance(a, HplLiteral):
+            if a.value == 0:
+                return a
             return HplLiteral.number(a.value / b.value)
-        assert op.is_power
-        return HplLiteral.number(a.value ** b.value)
+    if a == b:
+        return HplLiteral.number(1)
+    if _obvious_negatives(a, b):
+        return HplLiteral.number(-1)
+    return expr
 
-    if expr.is_function_call:
-        return _simplify_function_call(expr)
 
+@typechecked
+def _simplify_exponentiation(expr: HplBinaryOperator) -> HplExpression:
+    # assume simplification already called on operands
+    a: HplExpression = expr.operand1
+    b: HplExpression = expr.operand2
+    if isinstance(b, HplLiteral):
+        if b.value == 1:
+            return a
+        if b.value == 0:
+            return HplLiteral.number(1)
+        if isinstance(a, HplLiteral):
+            if a.value == 1 or a.value == 0:
+                return a
+            return HplLiteral.number(a.value ** b.value)
     return expr
 
 
@@ -739,7 +920,7 @@ def _simplify_function_call(call: HplFunctionCall) -> HplExpression:
         return _simplify_function_max(call)
 
     elif fun.name == 'min':
-        return _simplify_function_max(call)
+        return _simplify_function_min(call)
 
     elif fun.name == 'gcd':
         # FIXME compound single argument signature
@@ -883,6 +1064,46 @@ def _simplify_function_min(call: HplFunctionCall) -> HplExpression:
     return call.but(arguments=variables)
 
 
+def _obviously_different(a: HplExpression, b: HplExpression) -> bool:
+    # assume arguments have been simplified
+    if _obvious_negatives(a, b):
+        return True
+    if isinstance(a, HplBinaryOperator):
+        op: BinaryOperatorDefinition = a.operator
+        assert not isinstance(a.operand1, HplLiteral)  # due to simplification
+        if op.is_plus or op.is_minus:
+            if a.operand1 == b and isinstance(a.operand2, HplLiteral):
+                assert a.operand2.value != 0  # due to simplification
+                return True
+        if op.is_times:
+            if a.operand1 == b and isinstance(a.operand2, HplLiteral):
+                assert a.operand2.value != 0  # due to simplification
+                assert a.operand2.value != 1  # due to simplification
+                return True
+        if op.is_division:
+            if a.operand1 == b and isinstance(a.operand2, HplLiteral):
+                assert a.operand2.value != 0  # due to simplification
+                assert a.operand2.value != 1  # due to simplification
+                return True
+        if op.is_power:
+            if a.operand1 == b and isinstance(a.operand2, HplLiteral):
+                assert a.operand2.value != 0  # due to simplification
+                assert a.operand2.value != 1  # due to simplification
+                return True
+    return False
+
+
+def _obvious_negatives(a: HplExpression, b: HplExpression) -> bool:
+    # assume arguments have been simplified
+    if isinstance(a, HplUnaryOperator):
+        if a.operator.is_not or a.operator.is_minus:
+            return a.operand == b
+    if isinstance(b, HplUnaryOperator):
+        if b.operator.is_not or b.operator.is_minus:
+            return b.operand == a
+    return False
+
+
 ###############################################################################
 # Convenience Logic Tests
 ###############################################################################
@@ -936,12 +1157,13 @@ def is_false(expr: HplExpression) -> bool:
     return expr.is_value and expr.is_literal and expr.value is False
 
 
-def is_self_or_field(expr: HplExpression) -> bool:
-    if is_self_reference(expr):
-        return True
-    if expr.is_accessor and is_self_reference(expr.object):
-        return True
-    return False
+def is_self_or_field(expr: HplExpression, deep: bool = False) -> bool:
+    if deep:
+        if isinstance(expr, HplUnaryOperator):
+            return is_self_or_field(expr.operand, deep=True)
+        if isinstance(expr, HplFunctionCall) and expr.arity == 1:
+            return is_self_or_field(expr.arguments[0], deep=True)
+    return is_self_reference(expr) or (expr.is_accessor and is_self_reference(expr.base_object()))
 
 
 def is_call_to(expr: HplExpression, function: str) -> bool:
@@ -955,17 +1177,10 @@ def empty_test(expr: HplExpression) -> HplBinaryOperator:
 
 
 def inverse_operator(op: BinaryOperatorDefinition) -> BinaryOperatorDefinition:
-    if op.commutative:
-        return op
-    if op.is_less_than:
-        return BinaryOperatorDefinition.greater_than()
-    if op.is_less_than_eq:
-        return BinaryOperatorDefinition.greater_than_eq()
-    if op.is_greater_than:
-        return BinaryOperatorDefinition.less_than()
-    if op.is_greater_than_eq:
-        return BinaryOperatorDefinition.less_than_eq()
-    raise ValueError(f'operator {op!r} does not have an inverse')
+    inverse = INVERSE_OPERATORS.get(op)
+    if inverse is None:
+        raise ValueError(f'operator {op!r} does not have an inverse')
+    return inverse
 
 
 def true() -> HplLiteral:

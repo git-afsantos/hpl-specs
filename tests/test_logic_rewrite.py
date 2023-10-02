@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from hpl.ast.expressions import HplExpression
+from hpl.ast.expressions import HplBinaryOperator, HplExpression, HplFieldAccess, HplLiteral
 from hpl.ast.predicates import HplContradiction, HplPredicate, HplPredicateExpression, HplVacuousTruth
 from hpl.parser import condition_parser, expression_parser
 from hpl.rewrite import (
@@ -350,3 +350,13 @@ def test_simplify_arithmetic():
     q = simplify(p)
     assert isinstance(q, HplExpression)
     assert q == parser.parse('False')
+    p = parser.parse('((2 - 1) * a * 1) = b * (1 / b)')
+    q = simplify(p)
+    assert isinstance(q, HplExpression)
+    # assert q == parser.parse('a = 1')
+    assert isinstance(q, HplBinaryOperator)
+    assert q.operator == '='
+    assert isinstance(q.operand1, HplFieldAccess)
+    assert q.operand1.field == 'a'
+    assert isinstance(q.operand2, HplLiteral)
+    assert q.operand2.value == 1

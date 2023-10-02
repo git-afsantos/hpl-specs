@@ -811,11 +811,12 @@ class BinaryOperatorDefinition:
     result: DataType
     infix: bool = True
     commutative: bool = False
+    associative: bool = False
 
     @classmethod
     def addition(cls) -> 'BinaryOperatorDefinition':
         t = DataType.NUMBER
-        return cls('+', t, t, t, infix=True, commutative=True)
+        return cls('+', t, t, t, infix=True, commutative=True, associative=True)
 
     @classmethod
     def subtraction(cls) -> 'BinaryOperatorDefinition':
@@ -825,7 +826,7 @@ class BinaryOperatorDefinition:
     @classmethod
     def multiplication(cls) -> 'BinaryOperatorDefinition':
         t = DataType.NUMBER
-        return cls('*', t, t, t, infix=True, commutative=True)
+        return cls('*', t, t, t, infix=True, commutative=True, associative=True)
 
     @classmethod
     def division(cls) -> 'BinaryOperatorDefinition':
@@ -835,7 +836,7 @@ class BinaryOperatorDefinition:
     @classmethod
     def power(cls) -> 'BinaryOperatorDefinition':
         t = DataType.NUMBER
-        return cls('**', t, t, t, infix=True, commutative=False)
+        return cls('**', t, t, t, infix=True, commutative=False, associative=True)
 
     @classmethod
     def implication(cls) -> 'BinaryOperatorDefinition':
@@ -845,27 +846,27 @@ class BinaryOperatorDefinition:
     @classmethod
     def equivalence(cls) -> 'BinaryOperatorDefinition':
         t = DataType.BOOL
-        return cls(IFF_OPERATOR, t, t, t, infix=True, commutative=True)
+        return cls(IFF_OPERATOR, t, t, t, infix=True, commutative=True, associative=True)
 
     @classmethod
     def disjunction(cls) -> 'BinaryOperatorDefinition':
         t = DataType.BOOL
-        return cls(OR_OPERATOR, t, t, t, infix=True, commutative=True)
+        return cls(OR_OPERATOR, t, t, t, infix=True, commutative=True, associative=True)
 
     @classmethod
     def conjunction(cls) -> 'BinaryOperatorDefinition':
         t = DataType.BOOL
-        return cls(AND_OPERATOR, t, t, t, infix=True, commutative=True)
+        return cls(AND_OPERATOR, t, t, t, infix=True, commutative=True, associative=True)
 
     @classmethod
     def equality(cls) -> 'BinaryOperatorDefinition':
         t = DataType.PRIMITIVE
-        return cls('=', t, t, DataType.BOOL, infix=True, commutative=True)
+        return cls('=', t, t, DataType.BOOL, infix=True, commutative=True, associative=True)
 
     @classmethod
     def inequality(cls) -> 'BinaryOperatorDefinition':
         t = DataType.PRIMITIVE
-        return cls('!=', t, t, DataType.BOOL, infix=True, commutative=True)
+        return cls('!=', t, t, DataType.BOOL, infix=True, commutative=True, associative=True)
 
     @classmethod
     def less_than(cls) -> 'BinaryOperatorDefinition':
