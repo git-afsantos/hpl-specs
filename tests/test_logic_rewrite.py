@@ -350,7 +350,7 @@ def test_simplify_arithmetic():
     q = simplify(p)
     assert isinstance(q, HplExpression)
     assert q == parser.parse('False')
-    p = parser.parse('((2 - 1) * a * 1) = b * (1 / b)')
+    p = parser.parse('((2 - 1) * a ** 1) = b * (1 / b)')
     q = simplify(p)
     assert isinstance(q, HplExpression)
     assert q == parser.parse('a = 1')
