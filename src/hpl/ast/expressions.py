@@ -11,6 +11,7 @@ from enum import Enum
 
 from attrs import field, frozen
 from attrs.validators import deep_iterable, instance_of
+from typeguard import check_type
 
 from hpl.ast.base import HplAstObject
 from hpl.errors import HplSanityError, index_out_of_range, missing_field, type_error_in_expr
@@ -112,7 +113,7 @@ class HplExpression(HplAstObject):
     def cast(self, t: DataType) -> 'HplExpression':
         try:
             r: DataType = self.data_type.cast(t)
-            return self.but(data_type=r)
+            return self if r == self.data_type else self.but(data_type=r)
         except TypeError as e:
             raise type_error_in_expr(e, self)
 
@@ -398,6 +399,21 @@ class HplLiteral(HplAtomicValue):
     @classmethod
     def false(cls) -> 'HplLiteral':
         return cls(token='False', value=False)
+
+    @classmethod
+    def boolean(cls, value: bool) -> 'HplLiteral':
+        value = check_type(value, bool)
+        return cls(token=str(value), value=value)
+
+    @classmethod
+    def number(cls, value: Union[int, float]) -> 'HplLiteral':
+        value = check_type(value, Union[int, float])
+        return cls(token=str(value), value=value)
+
+    @classmethod
+    def string(cls, value: str) -> 'HplLiteral':
+        value = check_type(value, str)
+        return cls(token=value, value=value)
 
     @property
     def default_data_type(self) -> DataType:
@@ -795,11 +811,12 @@ class BinaryOperatorDefinition:
     result: DataType
     infix: bool = True
     commutative: bool = False
+    associative: bool = False
 
     @classmethod
     def addition(cls) -> 'BinaryOperatorDefinition':
         t = DataType.NUMBER
-        return cls('+', t, t, t, infix=True, commutative=True)
+        return cls('+', t, t, t, infix=True, commutative=True, associative=True)
 
     @classmethod
     def subtraction(cls) -> 'BinaryOperatorDefinition':
@@ -809,7 +826,7 @@ class BinaryOperatorDefinition:
     @classmethod
     def multiplication(cls) -> 'BinaryOperatorDefinition':
         t = DataType.NUMBER
-        return cls('*', t, t, t, infix=True, commutative=True)
+        return cls('*', t, t, t, infix=True, commutative=True, associative=True)
 
     @classmethod
     def division(cls) -> 'BinaryOperatorDefinition':
@@ -819,7 +836,7 @@ class BinaryOperatorDefinition:
     @classmethod
     def power(cls) -> 'BinaryOperatorDefinition':
         t = DataType.NUMBER
-        return cls('**', t, t, t, infix=True, commutative=False)
+        return cls('**', t, t, t, infix=True, commutative=False, associative=True)
 
     @classmethod
     def implication(cls) -> 'BinaryOperatorDefinition':
@@ -829,27 +846,27 @@ class BinaryOperatorDefinition:
     @classmethod
     def equivalence(cls) -> 'BinaryOperatorDefinition':
         t = DataType.BOOL
-        return cls(IFF_OPERATOR, t, t, t, infix=True, commutative=True)
+        return cls(IFF_OPERATOR, t, t, t, infix=True, commutative=True, associative=True)
 
     @classmethod
     def disjunction(cls) -> 'BinaryOperatorDefinition':
         t = DataType.BOOL
-        return cls(OR_OPERATOR, t, t, t, infix=True, commutative=True)
+        return cls(OR_OPERATOR, t, t, t, infix=True, commutative=True, associative=True)
 
     @classmethod
     def conjunction(cls) -> 'BinaryOperatorDefinition':
         t = DataType.BOOL
-        return cls(AND_OPERATOR, t, t, t, infix=True, commutative=True)
+        return cls(AND_OPERATOR, t, t, t, infix=True, commutative=True, associative=True)
 
     @classmethod
     def equality(cls) -> 'BinaryOperatorDefinition':
         t = DataType.PRIMITIVE
-        return cls('=', t, t, DataType.BOOL, infix=True, commutative=True)
+        return cls('=', t, t, DataType.BOOL, infix=True, commutative=True, associative=True)
 
     @classmethod
     def inequality(cls) -> 'BinaryOperatorDefinition':
         t = DataType.PRIMITIVE
-        return cls('!=', t, t, DataType.BOOL, infix=True, commutative=True)
+        return cls('!=', t, t, DataType.BOOL, infix=True, commutative=True, associative=True)
 
     @classmethod
     def less_than(cls) -> 'BinaryOperatorDefinition':
@@ -887,6 +904,10 @@ class BinaryOperatorDefinition:
         return (self.parameter1, self.parameter2)
 
     @property
+    def is_arithmetic(self) -> bool:
+        return self.token in ('+', '-', '*', '/', '**')
+
+    @property
     def is_plus(self) -> bool:
         return self.token == '+'
 
@@ -903,6 +924,42 @@ class BinaryOperatorDefinition:
         return self.token == '/'
 
     @property
+    def is_power(self) -> bool:
+        return self.token == '**'
+
+    @property
+    def is_inclusion(self) -> bool:
+        return self.token == IN_OPERATOR
+
+    @property
+    def is_comparison(self) -> bool:
+        return self.token in ('=', '!=', '<', '<=', '>', '>=')
+
+    @property
+    def is_equality(self) -> bool:
+        return self.token == '='
+
+    @property
+    def is_inequality(self) -> bool:
+        return self.token == '!='
+
+    @property
+    def is_less_than(self) -> bool:
+        return self.token == '<'
+
+    @property
+    def is_less_than_eq(self) -> bool:
+        return self.token == '<='
+
+    @property
+    def is_greater_than(self) -> bool:
+        return self.token == '>'
+
+    @property
+    def is_greater_than_eq(self) -> bool:
+        return self.token == '>='
+
+    @property
     def is_and(self) -> bool:
         return self.token == AND_OPERATOR
 
@@ -917,6 +974,10 @@ class BinaryOperatorDefinition:
     @property
     def is_iff(self) -> bool:
         return self.token == IFF_OPERATOR
+
+    @property
+    def similar_parameter_types(self) -> bool:
+        return bool(self.parameter1 & self.parameter2)
 
     def __str__(self) -> str:
         return self.token
@@ -986,6 +1047,31 @@ class HplBinaryOperator(HplExpression):
 
     def __attrs_post_init__(self):
         object.__setattr__(self, 'data_type', self.operator.result)
+        if self.operator.similar_parameter_types:
+            a: HplExpression = self.operand1.cast(self.operand2.data_type)
+            b: HplExpression = self.operand2.cast(a.data_type)
+            object.__setattr__(self, 'operand1', a)
+            object.__setattr__(self, 'operand2', b)
+
+    @classmethod
+    def addition(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
+        return cls(operator=BuiltinBinaryOperator.ADD, operand1=a, operand2=b)
+
+    @classmethod
+    def subtraction(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
+        return cls(operator=BuiltinBinaryOperator.SUB, operand1=a, operand2=b)
+
+    @classmethod
+    def multiplication(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
+        return cls(operator=BuiltinBinaryOperator.MULT, operand1=a, operand2=b)
+
+    @classmethod
+    def division(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
+        return cls(operator=BuiltinBinaryOperator.DIV, operand1=a, operand2=b)
+
+    @classmethod
+    def power(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
+        return cls(operator=BuiltinBinaryOperator.POW, operand1=a, operand2=b)
 
     @classmethod
     def conjunction(cls, a: HplExpression, b: HplExpression) -> 'HplBinaryOperator':
@@ -1462,6 +1548,10 @@ class HplFieldAccess(HplDataAccess):
     def is_field(self) -> bool:
         return True
 
+    @property
+    def object(self) -> HplExpression:
+        return self.message
+
     def children(self) -> Tuple[HplExpression]:
         return (self.message,)
 
@@ -1512,6 +1602,10 @@ class HplArrayAccess(HplDataAccess):
     @property
     def is_indexed(self) -> bool:
         return True
+
+    @property
+    def object(self) -> HplExpression:
+        return self.array
 
     def children(self) -> Tuple[HplExpression, HplExpression]:
         return (self.array, self.index)

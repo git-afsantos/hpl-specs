@@ -76,6 +76,7 @@ setup(
     install_requires=[
         'attrs~=23.0',
         'lark~=1.0',
+        'typeguard~=4.1',
     ],
     extras_require={
         'dev': [

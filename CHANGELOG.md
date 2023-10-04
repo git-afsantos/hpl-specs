@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## v1.3.0 - 2023-10-04
+### Added
+- `split_and(p: HplPredicate | HplExpression)` function to `hpl.rewrite` module.
+- `simplify(p: HplPredicate | HplExpression)` function to `hpl.rewrite` module.
+- `is_inclusion` and `is_comparison` properties to `BinaryOperatorDefinition`.
+- Factory functions `boolean`, `number` and `string` to `HplLiteral`.
+
+### Changed
+- Small optimization to `HplExpression` type checking system.
+
+### Fixed
+- `HplPredicateExpression.expression` is now cast to `DataType.BOOL` on construction.
+
 ## v1.2.0 - 2023-09-08
 ### Added
 - `canonical_form(property: HplProperty)` function to `hpl.rewrite` module.
