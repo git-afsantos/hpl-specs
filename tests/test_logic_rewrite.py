@@ -354,9 +354,3 @@ def test_simplify_arithmetic():
     q = simplify(p)
     assert isinstance(q, HplExpression)
     assert q == parser.parse('a = 1')
-    # assert isinstance(q, HplBinaryOperator)
-    # assert q.operator.is_equality
-    # assert isinstance(q.operand1, HplFieldAccess)
-    # assert q.operand1.field == 'a'
-    # assert isinstance(q.operand2, HplLiteral)
-    # assert q.operand2.value == 1
