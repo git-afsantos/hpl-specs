@@ -113,7 +113,7 @@ class HplExpression(HplAstObject):
     def cast(self, t: DataType) -> 'HplExpression':
         try:
             r: DataType = self.data_type.cast(t)
-            return self.but(data_type=r)
+            return self if r == self.data_type else self.but(data_type=r)
         except TypeError as e:
             raise type_error_in_expr(e, self)
 
@@ -975,6 +975,10 @@ class BinaryOperatorDefinition:
     def is_iff(self) -> bool:
         return self.token == IFF_OPERATOR
 
+    @property
+    def similar_parameter_types(self) -> bool:
+        return bool(self.parameter1 & self.parameter2)
+
     def __str__(self) -> str:
         return self.token
 
@@ -1043,6 +1047,11 @@ class HplBinaryOperator(HplExpression):
 
     def __attrs_post_init__(self):
         object.__setattr__(self, 'data_type', self.operator.result)
+        if self.operator.similar_parameter_types:
+            a: HplExpression = self.operand1.cast(self.operand2.data_type)
+            b: HplExpression = self.operand2.cast(a.data_type)
+            object.__setattr__(self, 'operand1', a)
+            object.__setattr__(self, 'operand2', b)
 
     @classmethod
     def addition(cls, a: HplExpression, b: HplExpression) -> 'BinaryOperatorDefinition':
