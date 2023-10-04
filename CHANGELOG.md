@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `is_inclusion` and `is_comparison` properties to `BinaryOperatorDefinition`.
 - Factory functions `boolean`, `number` and `string` to `HplLiteral`.
 
+### Changed
+- Small optimization to `HplExpression` type checking system.
+
 ### Fixed
 - `HplPredicateExpression.expression` is now cast to `DataType.BOOL` on construction.
 
