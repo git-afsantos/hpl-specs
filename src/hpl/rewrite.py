@@ -127,6 +127,42 @@ def simplify(predicate_or_expression: P) -> P:
     return _simplify(predicate_or_expression)
 
 
+@typechecked
+def get_conjuncts(predicate_or_expression: P) -> List[HplExpression]:
+    if predicate_or_expression.is_predicate:
+        assert isinstance(predicate_or_expression, HplPredicate)
+        predicate_or_expression = predicate_or_expression.condition
+    assert isinstance(predicate_or_expression, HplExpression)
+    conjuncts: List[HplExpression] = []
+    stack = [predicate_or_expression]
+    while stack:
+        phi = stack.pop()
+        if isinstance(phi, HplBinaryOperator) and phi.operator.is_and:
+            stack.append(phi.operand1)
+            stack.append(phi.operand2)
+        else:
+            conjuncts.append(phi)
+    return conjuncts
+
+
+@typechecked
+def get_disjuncts(predicate_or_expression: P) -> List[HplExpression]:
+    if predicate_or_expression.is_predicate:
+        assert isinstance(predicate_or_expression, HplPredicate)
+        predicate_or_expression = predicate_or_expression.condition
+    assert isinstance(predicate_or_expression, HplExpression)
+    disjuncts: List[HplExpression] = []
+    stack = [predicate_or_expression]
+    while stack:
+        phi = stack.pop()
+        if isinstance(phi, HplBinaryOperator) and phi.operator.is_or:
+            stack.append(phi.operand1)
+            stack.append(phi.operand2)
+        else:
+            disjuncts.append(phi)
+    return disjuncts
+
+
 ###############################################################################
 # Formula Rewriting - Helper Functions
 ###############################################################################
@@ -611,6 +647,18 @@ def _simplify_conjunction(phi: HplBinaryOperator) -> HplExpression:
     # p & ~p == F
     if _obviously_different(p, q):
         return false()
+    # p & (q & p) == p & q
+    conjuncts = get_conjuncts(p)
+    conjuncts.extend(get_conjuncts(q))
+    unique = set(conjuncts)
+    if len(conjuncts) != len(unique):
+        if len(unique) == 1:
+            return conjuncts[0]
+        conjuncts = list(unique)
+        psi = And(conjuncts[0], conjuncts[1])
+        for i in range(2, len(conjuncts)):
+            psi = And(conjuncts[i], psi)
+        return psi
     return phi if p is phi.operand1 and q is phi.operand2 else And(p, q)
 
 
@@ -637,6 +685,18 @@ def _simplify_disjunction(phi: HplBinaryOperator) -> HplExpression:
     # p | ~p == T
     if _obviously_different(p, q):
         return true()
+    # p | (q | p) == p | q
+    disjuncts = get_disjuncts(p)
+    disjuncts.extend(get_disjuncts(q))
+    unique = set(disjuncts)
+    if len(disjuncts) != len(unique):
+        if len(unique) == 1:
+            return disjuncts[0]
+        disjuncts = list(unique)
+        psi = Or(disjuncts[0], disjuncts[1])
+        for i in range(2, len(disjuncts)):
+            psi = Or(disjuncts[i], psi)
+        return psi
     return phi if p is phi.operand1 and q is phi.operand2 else Or(p, q)
 
 

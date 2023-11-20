@@ -5,10 +5,12 @@
 # Imports
 ###############################################################################
 
-from hpl.ast.expressions import HplBinaryOperator, HplExpression, HplFieldAccess, HplLiteral
+from hpl.ast.expressions import HplBinaryOperator, HplExpression
 from hpl.ast.predicates import HplContradiction, HplPredicate, HplPredicateExpression, HplVacuousTruth
 from hpl.parser import condition_parser, expression_parser
 from hpl.rewrite import (
+    get_conjuncts,
+    get_disjuncts,
     is_true,
     refactor_reference,
     replace_this_with_var,
@@ -277,6 +279,19 @@ def test_simplify_and():
     q = simplify(p)
     assert isinstance(q, HplPredicateExpression)
     assert q == a
+    p = parser.parse('a and (b and (c and a))')
+    q = simplify(p)
+    assert isinstance(q, HplPredicateExpression)
+    assert sorted([ref.field for ref in get_conjuncts(q.condition)]) == ['a', 'b', 'c']
+    x = q.condition
+    assert isinstance(x, HplBinaryOperator)
+    assert x.operator.is_and
+    assert not isinstance(x.operand1, HplBinaryOperator)
+    assert isinstance(x.operand2, HplBinaryOperator)
+    x = x.operand2
+    assert x.operator.is_and
+    assert not isinstance(x.operand1, HplBinaryOperator)
+    assert not isinstance(x.operand2, HplBinaryOperator)
 
 
 def test_simplify_or():
@@ -311,6 +326,19 @@ def test_simplify_or():
     q = simplify(p)
     assert isinstance(q, HplPredicateExpression)
     assert q == a
+    p = parser.parse('a or (b or (c or a))')
+    q = simplify(p)
+    assert isinstance(q, HplPredicateExpression)
+    x = q.condition
+    assert isinstance(x, HplBinaryOperator)
+    assert sorted([ref.field for ref in get_disjuncts(q.condition)]) == ['a', 'b', 'c']
+    assert x.operator.is_or
+    assert not isinstance(x.operand1, HplBinaryOperator)
+    assert isinstance(x.operand2, HplBinaryOperator)
+    x = x.operand2
+    assert x.operator.is_or
+    assert not isinstance(x.operand1, HplBinaryOperator)
+    assert not isinstance(x.operand2, HplBinaryOperator)
 
 
 def test_simplify_comparison():
