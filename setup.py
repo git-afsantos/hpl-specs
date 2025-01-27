@@ -74,7 +74,7 @@ setup(
     },
     python_requires='>=3.8, <4',
     install_requires=[
-        'attrs>=23,<25',
+        'attrs>=23,<26',
         'lark~=1.0',
         'typeguard~=4.1',
     ],
