@@ -5,7 +5,9 @@
 # Imports
 ###############################################################################
 
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
+from typing import Any
+
+from collections.abc import Callable, Iterable
 
 from enum import Enum
 import math
@@ -72,7 +74,7 @@ class PropertyTransformer(Transformer):
 
     def hpl_property(
         self,
-        metadata: Optional[Dict[str, Any]],
+        metadata: dict[str, Any] | None,
         scope: HplScope,
         pattern: HplPattern,
     ) -> HplProperty:
@@ -84,8 +86,8 @@ class PropertyTransformer(Transformer):
         return hpl_property
 
     @v_args(inline=False)
-    def metadata(self, children: Iterable[Tuple[str, Any]]) -> Dict[str, Any]:
-        metadata: Dict[str, Any] = {}
+    def metadata(self, children: Iterable[tuple[str, Any]]) -> dict[str, Any]:
+        metadata: dict[str, Any] = {}
         pid = None
         dup = None
         for key, value in children:
@@ -98,13 +100,13 @@ class PropertyTransformer(Transformer):
             raise HplSyntaxError.duplicate_metadata(dup, pid=pid)
         return metadata
 
-    def metadata_id(self, data: str) -> Tuple[str, str]:
+    def metadata_id(self, data: str) -> tuple[str, str]:
         return ('id', data)
 
-    def metadata_title(self, data: str) -> Tuple[str, str]:
+    def metadata_title(self, data: str) -> tuple[str, str]:
         return ('title', data)
 
-    def metadata_desc(self, data: str) -> Tuple[str, str]:
+    def metadata_desc(self, data: str) -> tuple[str, str]:
         return ('description', data)
 
     @v_args(inline=False)
@@ -112,29 +114,29 @@ class PropertyTransformer(Transformer):
         assert not children
         return HplScope.globally()
 
-    def after_until(self, p: HplEvent, q: Optional[HplEvent] = None) -> HplScope:
+    def after_until(self, p: HplEvent, q: HplEvent | None = None) -> HplScope:
         return HplScope.after(p) if q is None else HplScope.after_until(p, q)
 
     def until(self, event: HplEvent) -> HplScope:
         return HplScope.until(event)
 
-    def existence(self, b: HplEvent, t: Optional[float]) -> HplPattern:
+    def existence(self, b: HplEvent, t: float | None) -> HplPattern:
         max_time = INF if t is None else t
         return HplPattern.existence(b, max_time=max_time)
 
-    def absence(self, b: HplEvent, t: Optional[float]) -> HplPattern:
+    def absence(self, b: HplEvent, t: float | None) -> HplPattern:
         max_time = INF if t is None else t
         return HplPattern.absence(b, max_time=max_time)
 
-    def response(self, a: HplEvent, b: HplEvent, t: Optional[float]) -> HplPattern:
+    def response(self, a: HplEvent, b: HplEvent, t: float | None) -> HplPattern:
         max_time = INF if t is None else t
         return HplPattern.response(a, b, max_time=max_time)
 
-    def prevention(self, a: HplEvent, b: HplEvent, t: Optional[float]) -> HplPattern:
+    def prevention(self, a: HplEvent, b: HplEvent, t: float | None) -> HplPattern:
         max_time = INF if t is None else t
         return HplPattern.prevention(a, b, max_time=max_time)
 
-    def requirement(self, b: HplEvent, a: HplEvent, t: Optional[float]) -> HplPattern:
+    def requirement(self, b: HplEvent, a: HplEvent, t: float | None) -> HplPattern:
         max_time = INF if t is None else t
         return HplPattern.requirement(b, a, max_time=max_time)
 
@@ -146,7 +148,7 @@ class PropertyTransformer(Transformer):
         else:
             return HplEventDisjunction(children[0], self.event_disjunction(children[1:]))
 
-    def event(self, name: str, alias: Optional[str], phi: Optional[HplPredicate]) -> HplSimpleEvent:
+    def event(self, name: str, alias: str | None, phi: HplPredicate | None) -> HplSimpleEvent:
         phi = HplVacuousTruth() if phi is None else phi
         return HplSimpleEvent.publish(name, alias=alias, predicate=phi)
 
@@ -160,15 +162,15 @@ class PropertyTransformer(Transformer):
         return expr
 
     @v_args(inline=False)
-    def condition(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
+    def condition(self, children: Iterable[str | HplExpression]) -> HplExpression:
         return self._lr_binop(children)
 
     @v_args(inline=False)
-    def disjunction(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
+    def disjunction(self, children: Iterable[str | HplExpression]) -> HplExpression:
         return self._lr_binop(children)
 
     @v_args(inline=False)
-    def conjunction(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
+    def conjunction(self, children: Iterable[str | HplExpression]) -> HplExpression:
         return self._lr_binop(children)
 
     def negation(self, token: str, phi: HplExpression) -> HplUnaryOperator:
@@ -185,25 +187,25 @@ class PropertyTransformer(Transformer):
         return HplQuantifier(quantifier, variable, domain, condition)
 
     @v_args(inline=False)
-    def atomic_condition(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
+    def atomic_condition(self, children: Iterable[str | HplExpression]) -> HplExpression:
         return self._lr_binop(children)
 
     def function_call(self, fun: str, arg: HplExpression) -> HplExpression:
         return HplFunctionCall(fun, (arg,))
 
     @v_args(inline=False)
-    def expr(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
+    def expr(self, children: Iterable[str | HplExpression]) -> HplExpression:
         return self._lr_binop(children)
 
     @v_args(inline=False)
-    def term(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
+    def term(self, children: Iterable[str | HplExpression]) -> HplExpression:
         return self._lr_binop(children)
 
     @v_args(inline=False)
-    def factor(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
+    def factor(self, children: Iterable[str | HplExpression]) -> HplExpression:
         return self._lr_binop(children)
 
-    def _lr_binop(self, children: Iterable[Union[str, HplExpression]]) -> HplExpression:
+    def _lr_binop(self, children: Iterable[str | HplExpression]) -> HplExpression:
         assert len(children) == 1 or len(children) == 3
         if len(children) == 3:
             op = _convert_binary_operator(children[1])
@@ -290,7 +292,7 @@ class PropertyTransformer(Transformer):
 @frozen
 class HplParser:
     _lark: Lark
-    transform: Optional[Callable[[HplAstObject], HplAstObject]] = None
+    transform: Callable[[HplAstObject], HplAstObject] | None = None
 
     @classmethod
     def from_grammar(
@@ -298,7 +300,7 @@ class HplParser:
         grammar: str,
         start: str = 'hpl_file',
         *,
-        transform: Optional[Callable[[HplAstObject], HplAstObject]] = None,
+        transform: Callable[[HplAstObject], HplAstObject] | None = None,
         debug: bool = False,
     ) -> 'HplParser':
         return cls(

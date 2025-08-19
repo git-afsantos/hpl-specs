@@ -5,7 +5,9 @@
 # Imports
 ###############################################################################
 
-from typing import Final, Iterator, Mapping, Optional, Tuple
+from typing import Final
+
+from collections.abc import Iterator, Mapping
 
 from enum import Enum, auto
 
@@ -58,17 +60,17 @@ class ScopeType(Enum):
 @frozen
 class HplScope(HplAstObject):
     scope_type: ScopeType = field(validator=in_(ScopeType))
-    activator: Optional[HplEvent] = field(
+    activator: HplEvent | None = field(
         default=None,
         validator=optional(instance_of(HplEvent)),
     )
-    terminator: Optional[HplEvent] = field(
+    terminator: HplEvent | None = field(
         default=None,
         validator=optional(instance_of(HplEvent)),
     )
 
     @activator.validator
-    def _check_activator(self, attribute, event: Optional[HplEvent]):
+    def _check_activator(self, attribute, event: HplEvent | None):
         if self.scope_type.should_have_activator:
             if event is None:
                 raise expected_not_none(attribute.name, self)
@@ -77,7 +79,7 @@ class HplScope(HplAstObject):
                 raise invalid_attr(attribute.name, None, event, self)
 
     @terminator.validator
-    def _check_terminator(self, attribute, event: Optional[HplEvent]):
+    def _check_terminator(self, attribute, event: HplEvent | None):
         if self.scope_type.should_have_terminator:
             if event is None:
                 raise expected_not_none(attribute.name, self)
@@ -125,7 +127,7 @@ class HplScope(HplAstObject):
     def has_terminator(self) -> bool:
         return self.terminator is not None
 
-    def children(self) -> Tuple[HplEvent]:
+    def children(self) -> tuple[HplEvent]:
         if self.activator is None and self.terminator is None:
             return ()
         if self.activator is None:
@@ -203,12 +205,12 @@ class PatternType(Enum):
 class HplPattern(HplAstObject):
     pattern_type: PatternType = field(validator=in_(PatternType))
     behaviour: HplEvent = field(validator=instance_of(HplEvent))
-    trigger: Optional[HplEvent] = field(default=None, validator=optional(instance_of(HplEvent)))
+    trigger: HplEvent | None = field(default=None, validator=optional(instance_of(HplEvent)))
     min_time: float = field(default=0.0, validator=ge(0.0))
     max_time: float = field(default=INF, converter=float)
 
     @trigger.validator
-    def _check_trigger(self, attribute, event: Optional[HplEvent]):
+    def _check_trigger(self, attribute, event: HplEvent | None):
         if self.pattern_type.should_have_trigger:
             if event is None:
                 raise expected_not_none(attribute.name, self)
@@ -335,7 +337,7 @@ class HplPattern(HplAstObject):
     def has_max_time(self) -> bool:
         return self.max_time >= 0.0 and self.max_time < INF
 
-    def children(self) -> Tuple[HplEvent]:
+    def children(self) -> tuple[HplEvent]:
         if self.trigger is None:
             return (self.behaviour,)
         return (self.trigger, self.behaviour)
@@ -386,10 +388,10 @@ class HplProperty(HplAstObject):
         return self.pattern.is_liveness
 
     @property
-    def uid(self) -> Optional[str]:
+    def uid(self) -> str | None:
         return self.metadata.get('id', None)
 
-    def children(self) -> Tuple[HplScope, HplPattern]:
+    def children(self) -> tuple[HplScope, HplPattern]:
         return (self.scope, self.pattern)
 
     def is_fully_typed(self) -> bool:
@@ -414,7 +416,7 @@ class HplProperty(HplAstObject):
             yield self.scope.terminator
 
     def sanity_check(self) -> None:
-        initial: Tuple[str] = self._check_activator()
+        initial: tuple[str] = self._check_activator()
         if self.pattern.is_absence or self.pattern.is_existence:
             self._check_behaviour(initial)
         elif self.pattern.is_requirement:
@@ -427,14 +429,14 @@ class HplProperty(HplAstObject):
             raise TypeError(f'unexpected pattern type: {self.pattern!r}')
         self._check_terminator(initial)
 
-    def _check_activator(self) -> Tuple[str]:
+    def _check_activator(self) -> tuple[str]:
         p = self.scope.activator
         if p is not None:
             self._check_refs_defined(p, ())
             return p.aliases()
         return ()
 
-    def _check_trigger(self, available: Tuple[str]) -> Tuple[str]:
+    def _check_trigger(self, available: tuple[str]) -> tuple[str]:
         a = self.pattern.trigger
         assert a is not None
         self._check_refs_defined(a, available)
@@ -442,25 +444,25 @@ class HplProperty(HplAstObject):
         self._check_duplicates(aliases, available)
         return aliases + available
 
-    def _check_behaviour(self, available: Tuple[str]) -> Tuple[str]:
+    def _check_behaviour(self, available: tuple[str]) -> tuple[str]:
         b = self.pattern.behaviour
         self._check_refs_defined(b, available)
         aliases = b.aliases()
         self._check_duplicates(aliases, available)
         return aliases + available
 
-    def _check_terminator(self, available: Tuple[str]) -> None:
+    def _check_terminator(self, available: tuple[str]) -> None:
         q = self.scope.terminator
         if q is not None:
             self._check_refs_defined(q, available)
             self._check_duplicates(q.aliases(), available)
 
-    def _check_refs_defined(self, event: HplEvent, available: Tuple[str]) -> None:
+    def _check_refs_defined(self, event: HplEvent, available: tuple[str]) -> None:
         for ref in event.external_references():
             if ref not in available:
                 raise HplSanityError.ref_undefined_event(ref, event)
 
-    def _check_duplicates(self, aliases: Tuple[str], available: Tuple[str]) -> None:
+    def _check_duplicates(self, aliases: tuple[str], available: tuple[str]) -> None:
         for alias in aliases:
             if alias in available:
                 raise HplSanityError.already_defined(alias, self)

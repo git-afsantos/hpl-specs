@@ -5,7 +5,9 @@
 # Imports
 ###############################################################################
 
-from typing import Any, Callable, Final, Iterable, List, Mapping, Optional, Set, Tuple, Type, Union
+from typing import Any, Final, Union
+
+from collections.abc import Callable, Iterable, Mapping
 
 from enum import Enum
 
@@ -125,7 +127,7 @@ class HplExpression(HplAstObject):
         except TypeError as e:
             raise type_error_in_expr(e, self)
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         refs = set()
         for expr in self.children():
             refs.update(expr.external_references())
@@ -166,7 +168,7 @@ class HplExpression(HplAstObject):
     def type_check_references(
         self,
         this_msg: TypeToken,
-        variables: Optional[Mapping[str, TypeToken]] = None,
+        variables: Mapping[str, TypeToken] | None = None,
     ):
         variables = variables if variables is not None else {}
         stack = [self]
@@ -232,13 +234,13 @@ class HplValue(HplExpression):
 ###############################################################################
 
 
-def _convert_set_values(values: Iterable[HplExpression]) -> Tuple[HplExpression]:
+def _convert_set_values(values: Iterable[HplExpression]) -> tuple[HplExpression]:
     return tuple(v.cast(DataType.PRIMITIVE) for v in values)
 
 
 @frozen
 class HplSet(HplValue):
-    values: Tuple[HplExpression] = field(
+    values: tuple[HplExpression] = field(
         converter=_convert_set_values,
         validator=deep_iterable(instance_of(HplExpression)),
     )
@@ -255,10 +257,10 @@ class HplSet(HplValue):
     def subtypes(self) -> DataType:
         return DataType.union(value.data_type for value in self.values)
 
-    def to_set(self) -> Set[HplExpression]:
+    def to_set(self) -> set[HplExpression]:
         return set(self.values)
 
-    def children(self) -> Tuple[HplExpression]:
+    def children(self) -> tuple[HplExpression]:
         return self.values
 
     def reshape(
@@ -311,7 +313,7 @@ class HplRange(HplValue):
     def subtypes(self) -> DataType:
         return DataType.NUMBER
 
-    def children(self) -> Tuple[HplExpression]:
+    def children(self) -> tuple[HplExpression]:
         return (self.min_value, self.max_value)
 
     def reshape(
@@ -345,7 +347,7 @@ class HplRange(HplValue):
 
 @frozen
 class HplAtomicValue(HplValue):
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         return set()
 
     def contains_reference(self, _alias: str) -> bool:
@@ -382,7 +384,7 @@ class HplAtomicValue(HplValue):
 @frozen
 class HplLiteral(HplAtomicValue):
     token: str
-    value: Union[bool, int, float, str] = field(validator=instance_of((bool, int, float, str)))
+    value: bool | int | float | str = field(validator=instance_of((bool, int, float, str)))
 
     def __attrs_post_init__(self):
         if self.value is True or self.value is False:
@@ -406,7 +408,7 @@ class HplLiteral(HplAtomicValue):
         return cls(token=str(value), value=value)
 
     @classmethod
-    def number(cls, value: Union[int, float]) -> 'HplLiteral':
+    def number(cls, value: int | float) -> 'HplLiteral':
         value = check_type(value, Union[int, float])
         return cls(token=str(value), value=value)
 
@@ -475,7 +477,7 @@ class HplVarReference(HplAtomicValue):
     def name(self) -> str:
         return self.token[1:]  # remove lead "@"
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         return {self.name}
 
     def contains_reference(self, alias: str) -> bool:
@@ -509,7 +511,7 @@ class QuantifierType(Enum):
         return self.value
 
 
-def _convert_quantifier_type(t: Union[str, QuantifierType]) -> QuantifierType:
+def _convert_quantifier_type(t: str | QuantifierType) -> QuantifierType:
     return t if isinstance(t, QuantifierType) else QuantifierType(t)
 
 
@@ -548,10 +550,8 @@ class HplQuantifier(HplExpression):
                 # assert not obj.is_defined
                 if self.variable == obj.name:
                     raise HplSanityError(
-                        (
                             f"cannot reference quantified variable '{obj.name}'"
                             f' in the domain of «{self}»'
-                        )
                     )
 
     @condition.validator
@@ -617,10 +617,10 @@ class HplQuantifier(HplExpression):
     def phi(self) -> HplExpression:
         return self.condition
 
-    def children(self) -> Tuple[HplExpression, HplExpression]:
+    def children(self) -> tuple[HplExpression, HplExpression]:
         return (self.domain, self.condition)
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         refs = self.domain.external_references()
         refs |= self.condition.external_references()
         refs.remove(self.variable)
@@ -709,7 +709,7 @@ class BuiltinUnaryOperator(Enum):
 
 
 def _convert_unary_operator(
-    op: Union[str, BuiltinUnaryOperator, UnaryOperatorDefinition]
+    op: str | BuiltinUnaryOperator | UnaryOperatorDefinition
 ) -> UnaryOperatorDefinition:
     if isinstance(op, UnaryOperatorDefinition):
         return op
@@ -764,10 +764,10 @@ class HplUnaryOperator(HplExpression):
     def parameter_type(self) -> DataType:
         return self.operator.parameter
 
-    def children(self) -> Tuple[HplExpression]:
+    def children(self) -> tuple[HplExpression]:
         return (self.operand,)
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         return self.operand.external_references()
 
     def contains_reference(self, alias: str) -> bool:
@@ -900,7 +900,7 @@ class BinaryOperatorDefinition:
         return self.token
 
     @property
-    def parameters(self) -> Tuple[DataType, DataType]:
+    def parameters(self) -> tuple[DataType, DataType]:
         return (self.parameter1, self.parameter2)
 
     @property
@@ -1016,7 +1016,7 @@ class BuiltinBinaryOperator(Enum):
 
 
 def _convert_binary_operator(
-    op: Union[str, BuiltinBinaryOperator, BinaryOperatorDefinition]
+    op: str | BuiltinBinaryOperator | BinaryOperatorDefinition
 ) -> BinaryOperatorDefinition:
     if isinstance(op, BinaryOperatorDefinition):
         return op
@@ -1125,7 +1125,7 @@ class HplBinaryOperator(HplExpression):
     def parameter2_type(self) -> DataType:
         return self.operator.parameter2
 
-    def children(self) -> Tuple[HplExpression, HplExpression]:
+    def children(self) -> tuple[HplExpression, HplExpression]:
         return (self.operand1, self.operand2)
 
     def reshape(
@@ -1152,7 +1152,7 @@ class HplBinaryOperator(HplExpression):
 
 
 # necessary alias to shorten the following lines
-BinOp: Final[Type[HplBinaryOperator]] = HplBinaryOperator
+BinOp: Final[type[HplBinaryOperator]] = HplBinaryOperator
 
 And: Final[Callable[[HplExpression, HplExpression], HplBinaryOperator]] = BinOp.conjunction
 Or: Final[Callable[[HplExpression, HplExpression], HplBinaryOperator]] = BinOp.disjunction
@@ -1164,9 +1164,9 @@ Iff: Final[Callable[[HplExpression, HplExpression], HplBinaryOperator]] = BinOp.
 class FunctionSignature:
     """Each of these objects represents a function overload."""
 
-    parameters: Tuple[DataType]
+    parameters: tuple[DataType]
     result: DataType
-    variadic: Optional[DataType] = None  # type of variadic parameters
+    variadic: DataType | None = None  # type of variadic parameters
 
     @property
     def is_variadic(self) -> bool:
@@ -1199,13 +1199,13 @@ class FunctionSignature:
 @frozen
 class FunctionDefinition:
     name: str
-    overloads: Tuple[FunctionSignature]
+    overloads: tuple[FunctionSignature]
 
     @property
     def result(self) -> DataType:
         return DataType.union(sig.result for sig in self.overloads)
 
-    def check_arguments(self, args: Tuple[HplExpression]):
+    def check_arguments(self, args: tuple[HplExpression]):
         types = tuple(arg.data_type for arg in args)
         for sig in self.overloads:
             if sig.accepts(types):
@@ -1417,7 +1417,7 @@ class BuiltinFunction(Enum):
 
 
 def _convert_function_def(
-    fun: Union[str, BuiltinFunction, FunctionDefinition]
+    fun: str | BuiltinFunction | FunctionDefinition
 ) -> FunctionDefinition:
     if isinstance(fun, FunctionDefinition):
         return fun
@@ -1435,10 +1435,10 @@ class HplFunctionCall(HplExpression):
         converter=_convert_function_def,
         validator=instance_of(FunctionDefinition),
     )
-    arguments: Tuple[HplExpression] = field(converter=tuple)
+    arguments: tuple[HplExpression] = field(converter=tuple)
 
     @arguments.validator
-    def _check_arguments(self, _attribute, args: Tuple[HplExpression]):
+    def _check_arguments(self, _attribute, args: tuple[HplExpression]):
         self.function.check_arguments(args)
 
     def __attrs_post_init__(self):
@@ -1452,7 +1452,7 @@ class HplFunctionCall(HplExpression):
     def arity(self) -> int:
         return len(self.arguments)
 
-    def children(self) -> Tuple[HplExpression]:
+    def children(self) -> tuple[HplExpression]:
         return self.arguments
 
     def reshape(
@@ -1514,11 +1514,11 @@ class HplDataAccess(HplExpression):
     def type_check_references(
         self,
         this_msg: TypeToken,
-        variables: Optional[Mapping[str, TypeToken]] = None,
+        variables: Mapping[str, TypeToken] | None = None,
     ):
         if variables is None:
             variables = {}
-        stack: List[HplDataAccess] = [self]
+        stack: list[HplDataAccess] = [self]
         expr = self.object
         while expr.is_accessor:
             stack.append(expr)
@@ -1552,10 +1552,10 @@ class HplFieldAccess(HplDataAccess):
     def object(self) -> HplExpression:
         return self.message
 
-    def children(self) -> Tuple[HplExpression]:
+    def children(self) -> tuple[HplExpression]:
         return (self.message,)
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         return self.message.external_references()
 
     def contains_reference(self, alias: str) -> bool:
@@ -1607,7 +1607,7 @@ class HplArrayAccess(HplDataAccess):
     def object(self) -> HplExpression:
         return self.array
 
-    def children(self) -> Tuple[HplExpression, HplExpression]:
+    def children(self) -> tuple[HplExpression, HplExpression]:
         return (self.array, self.index)
 
     def reshape(
@@ -1648,5 +1648,5 @@ def is_self_reference(expr: HplExpression) -> bool:
     return expr.is_value and expr.is_this_msg
 
 
-def is_var_reference(expr: HplExpression, alias: Optional[str] = None) -> bool:
+def is_var_reference(expr: HplExpression, alias: str | None = None) -> bool:
     return (expr.is_value and expr.is_variable) and (alias is None or expr.name == alias)

@@ -5,7 +5,9 @@
 # Imports
 ###############################################################################
 
-from typing import Any, Final, Iterable, Mapping, Tuple
+from typing import Any, Final
+
+from collections.abc import Iterable, Mapping
 
 from enum import Flag, auto
 
@@ -113,9 +115,9 @@ ARRAY_TYPE: Final[DataType] = DataType.ARRAY
 SET_TYPE: Final[DataType] = DataType.SET
 MESSAGE_TYPE: Final[DataType] = DataType.MESSAGE
 
-PRIMITIVE_TYPES: Final[Tuple[DataType]] = (BOOL_TYPE, NUMBER_TYPE, STRING_TYPE)
+PRIMITIVE_TYPES: Final[tuple[DataType]] = (BOOL_TYPE, NUMBER_TYPE, STRING_TYPE)
 
-BASE_TYPES: Final[Tuple[DataType]] = (
+BASE_TYPES: Final[tuple[DataType]] = (
     BOOL_TYPE,
     NUMBER_TYPE,
     STRING_TYPE,
@@ -168,10 +170,10 @@ class TypeToken:
 
 @frozen
 class EnumeratedType(TypeToken):
-    values: Tuple[Any] = field(factory=tuple, converter=tuple, validator=instance_of(tuple))
+    values: tuple[Any] = field(factory=tuple, converter=tuple, validator=instance_of(tuple))
 
     @values.validator
-    def _check_values(self, _attribute, values: Tuple[Any]):
+    def _check_values(self, _attribute, values: tuple[Any]):
         if self.type is DataType.BOOL:
             expected = bool
         elif self.type is DataType.NUMBER:
@@ -264,7 +266,7 @@ class RangedType(TypeToken):
 class MessageType(TypeToken):
     type: DataType = field(init=False, default=DataType.MESSAGE)
     fields: Mapping[str, TypeToken] = field(factory=dict)
-    constants: Mapping[str, Tuple[TypeToken, Any]] = field(factory=dict)
+    constants: Mapping[str, tuple[TypeToken, Any]] = field(factory=dict)
 
     def leaf_fields(self) -> Mapping[str, TypeToken]:
         fields = {}

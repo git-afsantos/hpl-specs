@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from typing import Dict, List, Mapping, Optional, Set, Tuple
+from collections.abc import Mapping
 
 from attrs import field, frozen
 from typeguard import typechecked
@@ -57,7 +57,7 @@ class HplPredicate(HplAstObject):
     def join(self, other: 'HplPredicate') -> 'HplPredicate':
         raise NotImplementedError()
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         return self.condition.external_references()
 
     def contains_reference(self, alias: str) -> bool:
@@ -75,7 +75,7 @@ class HplPredicate(HplAstObject):
     def type_check_references(
         self,
         this_msg: TypeToken,
-        variables: Optional[Mapping[str, TypeToken]] = None,
+        variables: Mapping[str, TypeToken] | None = None,
     ):
         raise NotImplementedError()
 
@@ -102,7 +102,7 @@ class HplPredicateExpression(HplPredicate):
         self._all_refs_same_type(ref_table)
         # self._some_field_refs(ref_table)
 
-    def _all_refs_same_type(self, table: Dict[str, List[HplExpression]]):
+    def _all_refs_same_type(self, table: dict[str, list[HplExpression]]):
         # All references to the same field/variable have the same type.
         for ref_group in table.values():
             # must traverse twice, in case we start with the most generic
@@ -117,7 +117,7 @@ class HplPredicateExpression(HplPredicate):
         ref_table = _get_reference_table(self.expression)
         self._some_field_refs(ref_table)
 
-    def _some_field_refs(self, table: Dict[str, List[HplExpression]]):
+    def _some_field_refs(self, table: dict[str, list[HplExpression]]):
         # There is at least one reference to a field (own).
         #   [NYI] Stricter: one reference per atomic condition.
         for ref_group in table.values():
@@ -141,7 +141,7 @@ class HplPredicateExpression(HplPredicate):
     def condition(self) -> HplExpression:
         return self.expression
 
-    def children(self) -> Tuple[HplExpression]:
+    def children(self) -> tuple[HplExpression]:
         return (self.expression,)
 
     def negate(self) -> HplPredicate:
@@ -167,7 +167,7 @@ class HplPredicateExpression(HplPredicate):
     def type_check_references(
         self,
         this_msg: TypeToken,
-        variables: Optional[Mapping[str, TypeToken]] = None,
+        variables: Mapping[str, TypeToken] | None = None,
     ):
         return self.expression.type_check_references(this_msg, variables=variables)
 
@@ -203,7 +203,7 @@ class HplVacuousTruth(HplPredicate):
     def join(self, other: HplPredicate):
         return other
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         return set()
 
     def contains_reference(self, _alias: str) -> bool:
@@ -221,7 +221,7 @@ class HplVacuousTruth(HplPredicate):
     def type_check_references(
         self,
         this_msg: TypeToken,
-        variables: Optional[Mapping[str, TypeToken]] = None,
+        variables: Mapping[str, TypeToken] | None = None,
     ):
         pass
 
@@ -252,7 +252,7 @@ class HplContradiction(HplPredicate):
     def join(self, other: HplPredicate) -> HplPredicate:
         return self
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         return set()
 
     def contains_reference(self, _alias: str) -> bool:
@@ -270,7 +270,7 @@ class HplContradiction(HplPredicate):
     def type_check_references(
         self,
         this_msg: TypeToken,
-        variables: Optional[Mapping[str, TypeToken]] = None,
+        variables: Mapping[str, TypeToken] | None = None,
     ):
         pass
 
@@ -283,7 +283,7 @@ class HplContradiction(HplPredicate):
 ###############################################################################
 
 
-def _get_reference_table(expr: HplExpression) -> Dict[str, List[HplExpression]]:
+def _get_reference_table(expr: HplExpression) -> dict[str, list[HplExpression]]:
     ref_table = {}
     for obj in expr.iterate():
         assert isinstance(obj, HplExpression)

@@ -5,7 +5,6 @@
 # Imports
 ###############################################################################
 
-from hpl.ast.properties import HplProperty
 from hpl.parser import property_parser
 from hpl.rewrite import canonical_form
 

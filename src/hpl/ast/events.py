@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from typing import Iterator, Mapping, Optional, Set, Tuple
+from collections.abc import Iterator, Mapping
 
 from enum import Enum, auto
 
@@ -37,10 +37,10 @@ class HplEvent(HplAstObject):
     def is_event_disjunction(self) -> bool:
         return False
 
-    def aliases(self) -> Tuple[str]:
+    def aliases(self) -> tuple[str]:
         return ()
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         return set()
 
     def contains_reference(self, alias: str) -> bool:
@@ -68,8 +68,8 @@ class HplSimpleEvent(HplEvent):
     name: str
     predicate: HplPredicate = field(validator=instance_of(HplPredicate))
     event_type: EventType = field(validator=in_(EventType))
-    alias: Optional[str] = None
-    message_type: Optional[TypeToken] = None
+    alias: str | None = None
+    message_type: TypeToken | None = None
 
     def __attrs_post_init__(self):
         if self.alias:
@@ -82,7 +82,7 @@ class HplSimpleEvent(HplEvent):
 
     @classmethod
     def publish(
-        cls, name: str, predicate: Optional[HplPredicate] = None, alias: Optional[str] = None
+        cls, name: str, predicate: HplPredicate | None = None, alias: str | None = None
     ) -> 'HplSimpleEvent':
         if predicate is None:
             predicate = HplVacuousTruth()
@@ -96,15 +96,15 @@ class HplSimpleEvent(HplEvent):
     def phi(self) -> HplPredicate:
         return self.predicate
 
-    def children(self) -> Tuple[HplPredicate]:
+    def children(self) -> tuple[HplPredicate]:
         return (self.predicate,)
 
-    def aliases(self) -> Tuple[str]:
+    def aliases(self) -> tuple[str]:
         if self.alias is None:
             return ()
         return (self.alias,)
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         refs = self.predicate.external_references()
         if self.alias:
             refs.discard(self.alias)
@@ -156,16 +156,16 @@ class HplEventDisjunction(HplEvent):
         return True
 
     @property
-    def events(self) -> Tuple[HplEvent, HplEvent]:
+    def events(self) -> tuple[HplEvent, HplEvent]:
         return (self.event1, self.event2)
 
-    def children(self) -> Tuple[HplEvent, HplEvent]:
+    def children(self) -> tuple[HplEvent, HplEvent]:
         return (self.event1, self.event2)
 
-    def aliases(self) -> Tuple[str]:
+    def aliases(self) -> tuple[str]:
         return self.event1.aliases() + self.event2.aliases()
 
-    def external_references(self) -> Set[str]:
+    def external_references(self) -> set[str]:
         return self.event1.external_references() | self.event2.external_references()
 
     def contains_reference(self, alias: str) -> bool:
@@ -182,10 +182,8 @@ class HplEventDisjunction(HplEvent):
         return self.but(event1=e1, event2=e2)
 
     def simple_events(self) -> Iterator[HplEvent]:
-        for event in self.event1.simple_events():
-            yield event
-        for event in self.event2.simple_events():
-            yield event
+        yield from self.event1.simple_events()
+        yield from self.event2.simple_events()
 
     def type_check_references(self, msg_types: Mapping[str, TypeToken]) -> None:
         self.event1.type_check_references(msg_types)

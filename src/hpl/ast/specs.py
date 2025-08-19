@@ -5,8 +5,6 @@
 # Imports
 ###############################################################################
 
-from typing import Tuple
-
 from attrs import field, frozen
 from attrs.validators import instance_of
 
@@ -20,13 +18,13 @@ from hpl.ast.properties import HplProperty
 
 @frozen
 class HplSpecification(HplAstObject):
-    properties: Tuple[HplProperty] = field(validator=instance_of(tuple))
+    properties: tuple[HplProperty] = field(validator=instance_of(tuple))
 
     @property
     def is_specification(self) -> bool:
         return True
 
-    def children(self) -> Tuple[HplProperty]:
+    def children(self) -> tuple[HplProperty]:
         return self.properties
 
     def sanity_check(self):
