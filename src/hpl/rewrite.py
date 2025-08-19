@@ -5,7 +5,7 @@
 # Imports
 ###############################################################################
 
-from typing import List, Optional, Tuple, TypeVar, Union
+from typing import TypeVar
 
 import math
 
@@ -87,7 +87,7 @@ def replace_var_with_this(predicate_or_expression: P, alias: str) -> P:
 
 
 @typechecked
-def refactor_reference(predicate_or_expression: P, alias: str) -> Tuple[P, P]:
+def refactor_reference(predicate_or_expression: P, alias: str) -> tuple[P, P]:
     if predicate_or_expression.is_predicate:
         return _refactor_ref_pred(predicate_or_expression, alias)
     else:
@@ -95,7 +95,7 @@ def refactor_reference(predicate_or_expression: P, alias: str) -> Tuple[P, P]:
 
 
 @typechecked
-def canonical_form(property: HplProperty) -> List[HplProperty]:
+def canonical_form(property: HplProperty) -> list[HplProperty]:
     if property.pattern.is_safety:
         return _canonical_form_safety(property)
     assert property.pattern.is_liveness
@@ -103,7 +103,7 @@ def canonical_form(property: HplProperty) -> List[HplProperty]:
 
 
 @typechecked
-def split_and(predicate_or_expression: P) -> List[HplExpression]:
+def split_and(predicate_or_expression: P) -> list[HplExpression]:
     if predicate_or_expression.is_predicate:
         assert isinstance(predicate_or_expression, HplPredicate)
         return _split_and_expr(predicate_or_expression.condition)
@@ -128,12 +128,12 @@ def simplify(predicate_or_expression: P) -> P:
 
 
 @typechecked
-def get_conjuncts(predicate_or_expression: P) -> List[HplExpression]:
+def get_conjuncts(predicate_or_expression: P) -> list[HplExpression]:
     if predicate_or_expression.is_predicate:
         assert isinstance(predicate_or_expression, HplPredicate)
         predicate_or_expression = predicate_or_expression.condition
     assert isinstance(predicate_or_expression, HplExpression)
-    conjuncts: List[HplExpression] = []
+    conjuncts: list[HplExpression] = []
     stack = [predicate_or_expression]
     while stack:
         phi = stack.pop()
@@ -146,12 +146,12 @@ def get_conjuncts(predicate_or_expression: P) -> List[HplExpression]:
 
 
 @typechecked
-def get_disjuncts(predicate_or_expression: P) -> List[HplExpression]:
+def get_disjuncts(predicate_or_expression: P) -> list[HplExpression]:
     if predicate_or_expression.is_predicate:
         assert isinstance(predicate_or_expression, HplPredicate)
         predicate_or_expression = predicate_or_expression.condition
     assert isinstance(predicate_or_expression, HplExpression)
-    disjuncts: List[HplExpression] = []
+    disjuncts: list[HplExpression] = []
     stack = [predicate_or_expression]
     while stack:
         phi = stack.pop()
@@ -169,7 +169,7 @@ def get_disjuncts(predicate_or_expression: P) -> List[HplExpression]:
 
 
 @typechecked
-def _refactor_ref_pred(phi: HplPredicate, alias: str) -> Tuple[HplPredicate, HplPredicate]:
+def _refactor_ref_pred(phi: HplPredicate, alias: str) -> tuple[HplPredicate, HplPredicate]:
     if phi.is_vacuous:
         return (phi, HplVacuousTruth())
     expr1, expr2 = _refactor_ref_expr(phi.condition, alias)
@@ -177,7 +177,7 @@ def _refactor_ref_pred(phi: HplPredicate, alias: str) -> Tuple[HplPredicate, Hpl
 
 
 @typechecked
-def _refactor_ref_expr(expr: HplExpression, alias: str) -> Tuple[HplExpression, HplExpression]:
+def _refactor_ref_expr(expr: HplExpression, alias: str) -> tuple[HplExpression, HplExpression]:
     if not expr.contains_reference(alias):
         return (expr, true())
     if not expr.can_be_bool:
@@ -194,7 +194,7 @@ def _refactor_ref_expr(expr: HplExpression, alias: str) -> Tuple[HplExpression, 
 
 
 @typechecked
-def _split_ref_quantifier(quant: HplQuantifier, alias: str) -> Tuple[HplExpression, HplExpression]:
+def _split_ref_quantifier(quant: HplQuantifier, alias: str) -> tuple[HplExpression, HplExpression]:
     var = quant.variable
     if quant.domain.contains_reference(alias):
         # move the whole expression
@@ -244,8 +244,8 @@ def _split_ref_quantifier(quant: HplQuantifier, alias: str) -> Tuple[HplExpressi
 
 @typechecked
 def _split_ref_operator(
-    op: Union[HplUnaryOperator, HplBinaryOperator], alias: str
-) -> Tuple[HplExpression, HplExpression]:
+    op: HplUnaryOperator | HplBinaryOperator, alias: str
+) -> tuple[HplExpression, HplExpression]:
     if op.arity == 1:
         assert isinstance(op, HplUnaryOperator)
         assert op.operator.is_not
@@ -266,7 +266,7 @@ def _split_ref_operator(
 
 
 @typechecked
-def _split_ref_negation(neg: HplUnaryOperator, alias: str) -> Tuple[HplExpression, HplExpression]:
+def _split_ref_negation(neg: HplUnaryOperator, alias: str) -> tuple[HplExpression, HplExpression]:
     expr = neg.operand
     assert expr.can_be_bool and expr.contains_reference(alias)
     if expr.is_value or expr.is_accessor or expr.is_function_call:
@@ -300,7 +300,7 @@ def _split_ref_negation(neg: HplUnaryOperator, alias: str) -> Tuple[HplExpressio
 
 
 @typechecked
-def _canonical_form_safety(property: HplProperty) -> List[HplProperty]:
+def _canonical_form_safety(property: HplProperty) -> list[HplProperty]:
     scopes = _canonical_form_scopes(property.scope)
     pattern = property.pattern
     patterns = [pattern.but(behaviour=event) for event in pattern.behaviour.simple_events()]
@@ -311,7 +311,7 @@ def _canonical_form_safety(property: HplProperty) -> List[HplProperty]:
 
 
 @typechecked
-def _canonical_form_liveness(property: HplProperty) -> List[HplProperty]:
+def _canonical_form_liveness(property: HplProperty) -> list[HplProperty]:
     scopes = _canonical_form_scopes(property.scope)
     if property.pattern.is_existence:
         patterns = [property.pattern]  # no splits
@@ -327,7 +327,7 @@ def _canonical_form_liveness(property: HplProperty) -> List[HplProperty]:
 
 
 @typechecked
-def _canonical_form_scopes(scope: HplScope) -> List[HplScope]:
+def _canonical_form_scopes(scope: HplScope) -> list[HplScope]:
     if scope.is_after:  # after or after-until
         assert scope.activator is not None
         return [scope.but(activator=event) for event in scope.activator.simple_events()]
@@ -336,9 +336,9 @@ def _canonical_form_scopes(scope: HplScope) -> List[HplScope]:
 
 
 @typechecked
-def _split_and_expr(phi: HplExpression) -> List[HplExpression]:
-    conditions: List[HplExpression] = []
-    stack: List[HplExpression] = [phi]
+def _split_and_expr(phi: HplExpression) -> list[HplExpression]:
+    conditions: list[HplExpression] = []
+    stack: list[HplExpression] = [phi]
     while stack:
         expr: HplExpression = stack.pop()
         # preprocessing
@@ -546,7 +546,7 @@ def _pre_simplify_binop(expr: HplBinaryOperator) -> HplBinaryOperator:
     if flip:
         if op.commutative:
             return expr.but(operand1=b, operand2=a)
-        inv: Optional[BinaryOperatorDefinition] = INVERSE_OPERATORS.get(op)
+        inv: BinaryOperatorDefinition | None = INVERSE_OPERATORS.get(op)
         if inv is None:
             return expr if noop else HplBinaryOperator(op, a, b)
         return HplBinaryOperator(inv, b, a)
@@ -997,8 +997,8 @@ def _simplify_function_call(call: HplFunctionCall) -> HplExpression:
 def _simplify_function_sum(call: HplFunctionCall) -> HplExpression:
     arg: HplExpression = _simplify(call.arguments[0])
     if isinstance(arg, HplSet):
-        variables: List[HplExpression] = []
-        literals: List[Union[int, float]] = []
+        variables: list[HplExpression] = []
+        literals: list[int | float] = []
         for v in arg.values:
             if is_number_literal(v):
                 assert isinstance(v, HplLiteral)
@@ -1024,8 +1024,8 @@ def _simplify_function_sum(call: HplFunctionCall) -> HplExpression:
 def _simplify_function_prod(call: HplFunctionCall) -> HplExpression:
     arg: HplExpression = _simplify(call.arguments[0])
     if isinstance(arg, HplSet):
-        variables: List[HplExpression] = []
-        literals: List[Union[int, float]] = []
+        variables: list[HplExpression] = []
+        literals: list[int | float] = []
         for v in arg.values:
             if is_number_literal(v):
                 assert isinstance(v, HplLiteral)
@@ -1071,8 +1071,8 @@ def _simplify_function_max(call: HplFunctionCall) -> HplExpression:
     else:
         values = call.arguments
 
-    variables: List[HplExpression] = []
-    literals: List[Union[int, float]] = []
+    variables: list[HplExpression] = []
+    literals: list[int | float] = []
     for v in values:
         if is_number_literal(v):
             assert isinstance(v, HplLiteral)
@@ -1107,8 +1107,8 @@ def _simplify_function_min(call: HplFunctionCall) -> HplExpression:
     else:
         values = call.arguments
 
-    variables: List[HplExpression] = []
-    literals: List[Union[int, float]] = []
+    variables: list[HplExpression] = []
+    literals: list[int | float] = []
     for v in values:
         if is_number_literal(v):
             assert isinstance(v, HplLiteral)

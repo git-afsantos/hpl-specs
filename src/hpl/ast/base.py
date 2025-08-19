@@ -5,7 +5,9 @@
 # Imports
 ###############################################################################
 
-from typing import Any, Dict, Iterator, Tuple
+from typing import Any
+
+from collections.abc import Iterator
 
 from attrs import evolve, field, frozen
 
@@ -16,7 +18,7 @@ from attrs import evolve, field, frozen
 
 @frozen
 class HplAstObject:
-    metadata: Dict[str, Any] = field(factory=dict, init=False, eq=False)
+    metadata: dict[str, Any] = field(factory=dict, init=False, eq=False)
 
     @property
     def is_specification(self) -> bool:
@@ -46,7 +48,7 @@ class HplAstObject:
     def is_expression(self) -> bool:
         return False
 
-    def children(self) -> Tuple['HplAstObject']:
+    def children(self) -> tuple['HplAstObject']:
         return ()
 
     def iterate(self) -> Iterator['HplAstObject']:

@@ -170,7 +170,7 @@ class HplPredicate(HplAstObject):
             t = rostype
         else:
             if expr.name not in aliases:
-                raise HplSanityError("undefined message alias: '{}'".format(expr.name))
+                raise HplSanityError(f"undefined message alias: '{expr.name}'")
             t = aliases[expr.name]
         assert t.is_message
         expr.ros_type = t

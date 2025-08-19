@@ -5,9 +5,10 @@
 # Imports
 ###############################################################################
 
-from typing import Dict, Final, Iterable, Optional
+from typing import Final
 
-from hypothesis import assume
+from collections.abc import Iterable
+
 from hypothesis.strategies import (
     SearchStrategy,
     booleans,
@@ -270,7 +271,7 @@ def parenthesized(strategy: SearchStrategy[str]) -> SearchStrategy[str]:
     return strategy.map(apply_parentheses)
 
 
-def _simple_event_builder(name: str, alias: Optional[str], pred: Optional[str]) -> str:
+def _simple_event_builder(name: str, alias: str | None, pred: str | None) -> str:
     alias = f' as {alias}' if alias else ''
     pred = f' {pred}' if pred else ''
     return f'{name}{alias}{pred}'
@@ -296,7 +297,7 @@ def events() -> SearchStrategy[str]:
     return one_of(simple_events(), event_disjunctions())
 
 
-def _unary_pattern_builder(kw: str, event: str, bound: Optional[str]) -> str:
+def _unary_pattern_builder(kw: str, event: str, bound: str | None) -> str:
     bound = f' within {bound}' if bound else ''
     return f'{kw} {event}{bound}'
 
@@ -307,7 +308,7 @@ def unary_patterns() -> SearchStrategy[str]:
     return builds(_unary_pattern_builder, pattern, events(), bound)
 
 
-def _binary_pattern_builder(kw: str, ev1: str, ev2: str, bound: Optional[str]) -> str:
+def _binary_pattern_builder(kw: str, ev1: str, ev2: str, bound: str | None) -> str:
     bound = f' within {bound}' if bound else ''
     return f'{ev1} {kw} {ev2}{bound}'
 
@@ -341,7 +342,7 @@ def scopes() -> SearchStrategy[str]:
     return one_of(just('globally'), after, until, after_until)
 
 
-def metadata() -> SearchStrategy[Dict[str, str]]:
+def metadata() -> SearchStrategy[dict[str, str]]:
     mandatory = {}
     optional = {
         'id': identifiers(),
@@ -351,7 +352,7 @@ def metadata() -> SearchStrategy[Dict[str, str]]:
     return fixed_dictionaries(mandatory, optional=optional)
 
 
-def _property_builder(meta: Optional[Dict[str, str]], scope: str, pattern: str) -> str:
+def _property_builder(meta: dict[str, str] | None, scope: str, pattern: str) -> str:
     meta = meta or {}
     annotations = ''.join(f'# {k}: {v}\n' for k, v in meta.items())
     return f'{annotations}{scope}: {pattern}'
